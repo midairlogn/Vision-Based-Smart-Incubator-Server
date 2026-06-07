@@ -1,0 +1,204 @@
+// OSS工具函数
+package utils
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"log/slog"
+	"strconv"
+	"time"
+
+	"github.com/aliyun/alibabacloud-oss-go-sdk-v2/oss"
+	"github.com/aliyun/alibabacloud-oss-go-sdk-v2/oss/credentials"
+
+	MQTT "github.com/eclipse/paho.mqtt.golang"
+)
+
+var (
+	ErrRegionRequired     = errors.New("region is required")
+	ErrBucketRequired     = errors.New("bucket name is required")
+	ErrObjectNameRequired = errors.New("object name is required")
+)
+
+// SignURL 生成预签名上传URL
+func signUploadURL(region string,
+	bucket_name string,
+	object_name string,
+	expire_time time.Duration) (string, error) {
+	// 检查region是否为空
+	if len(region) == 0 {
+		return "", ErrRegionRequired
+	}
+
+	// 检查bucket名称是否为空
+	if len(bucket_name) == 0 {
+		return "", ErrBucketRequired
+	}
+
+	// 检查object名称是否为空
+	if len(object_name) == 0 {
+		return "", ErrObjectNameRequired
+	}
+
+	// 加载默认配置并设置凭证提供者和区域
+	cfg := oss.LoadDefaultConfig().
+		WithCredentialsProvider(credentials.NewEnvironmentVariableCredentialsProvider()).
+		WithRegion(region)
+
+	// 创建OSS客户端
+	client := oss.NewClient(cfg)
+
+	// 生成PutObject的预签名URL
+	result, err := client.Presign(context.TODO(), &oss.PutObjectRequest{
+		Bucket: oss.Ptr(bucket_name),
+		Key:    oss.Ptr(object_name),
+	},
+		oss.PresignExpires(expire_time),
+	)
+	if err != nil {
+		return "", err
+	}
+	return result.URL, nil
+}
+
+// signDownloadURL 生成预签名下载url
+func signDownloadURL(region string,
+	bucket_name string,
+	object_name string,
+	expire_time time.Duration) (string, error) {
+	// 检查region是否为空
+	if len(region) == 0 {
+		return "", ErrRegionRequired
+	}
+
+	// 检查bucket名称是否为空
+	if len(bucket_name) == 0 {
+		return "", ErrBucketRequired
+	}
+
+	// 检查object名称是否为空
+	if len(object_name) == 0 {
+		return "", ErrObjectNameRequired
+	}
+
+	// 加载默认配置并设置凭证提供者和区域
+	cfg := oss.LoadDefaultConfig().
+		WithCredentialsProvider(credentials.NewEnvironmentVariableCredentialsProvider()).
+		WithRegion(region)
+
+	// 创建OSS客户端
+	client := oss.NewClient(cfg)
+
+	// 生成GetObject的预签名URL
+	result, err := client.Presign(context.TODO(), &oss.GetObjectRequest{
+		Bucket: oss.Ptr(bucket_name),
+		Key:    oss.Ptr(object_name),
+	},
+		oss.PresignExpires(expire_time),
+	)
+	if err != nil {
+		return "", err
+	}
+	return result.URL, nil
+}
+
+// uploadMessage MQTT发送URL信息
+func uploadMessage(client MQTT.Client,
+	uuid string,
+	timestamp time.Time,
+	status bool,
+	path string,
+	url string) {
+	topic := "server" + "/" + uuid + "/" + "upload"
+	qos := 1
+	retained := false
+
+	msg := struct {
+		Timestamp string `json:"timestamp"`
+		Success   bool   `json:"success"`
+		Path      string `json:"path"`
+		ImgURL    string `json:"url"`
+	}{timestamp.Format("2006-01-02 15:04:05"), status, path, url}
+	buffer := &bytes.Buffer{}
+	encoder := json.NewEncoder(buffer)
+	encoder.SetEscapeHTML(false) // 禁用转义
+	encoder.Encode(msg)
+
+	token := client.Publish(topic, byte(qos), retained, buffer.Bytes())
+	token.Wait()
+}
+
+// Upload 回调函数，处理来自mcu的上传请求
+func Upload(client MQTT.Client, uuid string, payload string) {
+	// {"timestamp":string, "plateid":int, "imgpath":string, "txtpath":string, "number":int}
+	var json_result struct {
+		Timestamp string `json:"timestamp"`
+		PlateID   int    `json:"plateid"`
+		ImgPath   string `json:"imgpath"`
+		TxtPath   string `json:"txtpath"`
+		Number    int    `json:"number"`
+	}
+	err := json.Unmarshal([]byte(payload), &json_result)
+	if err != nil {
+		slog.Error(fmt.Sprintf("Encounter error when decoding json: %v", err))
+		slog.Error(fmt.Sprintf("    Original message: %s", payload))
+		// TODO
+		// uploadMessage(client,uuid,false,json_result.ImgPath,"")
+		// uploadMessage(client,uuid,false,json_result.TxtPath,"")
+		return
+	}
+
+	// 解析时间
+	loc, _ := time.LoadLocation("Asia/Shanghai")
+	timestamp, err := time.ParseInLocation("2006-01-02 15:04:05", json_result.Timestamp, loc)
+	if err != nil {
+		// 解析时间失败时使用服务器时间作为替代
+		slog.Warn(fmt.Sprintf("Time parse fail: %v", err))
+		slog.Warn(fmt.Sprintf("    Original time: %s", json_result.Timestamp))
+		slog.Warn("Using server time instead")
+		timestamp = time.Now().In(loc)
+	}
+
+	// 生成图片的预签名URL
+	img_path := uuid + "/" +
+		strconv.Itoa(json_result.PlateID) + "/" +
+		timestamp.Format("20060102-150405") + ".jpg"
+	img_url, err := signUploadURL("cn-hangzhou",
+		"embedded-comptition",
+		img_path,
+		10*time.Minute)
+	if err != nil {
+		slog.Error(fmt.Sprintf("Sign URL failed: %v", err))
+		// TODO
+		return
+	}
+	uploadMessage(client, uuid, timestamp, true, json_result.ImgPath, img_url)
+
+	// 生成文本记录的预签名URL
+	txt_path := uuid + "/" +
+		strconv.Itoa(json_result.PlateID) + "/" +
+		timestamp.Format("20060102-150405") + ".txt"
+	txt_url, err := signUploadURL("cn-hangzhou",
+		"embedded-comptition",
+		txt_path,
+		10*time.Minute)
+	if err != nil {
+		slog.Error(fmt.Sprintf("Sign URL failed: %v", err))
+		// TODO
+		return
+	}
+	uploadMessage(client, uuid, timestamp, true, json_result.TxtPath, txt_url)
+
+	// 上报文件路径和数量
+	RecordColonyData(uuid,
+		json_result.PlateID,
+		timestamp,
+		img_path,
+		txt_path,
+		json_result.Number)
+
+	slog.Info("Publish upload reply success")
+}
