@@ -116,7 +116,13 @@
             align-items: center; margin-bottom: 16px;
         }
         .modal-header h2 { font-size: 16px; color: #333; }
+        .modal-header .modal-info {
+            display: flex; gap: 16px; align-items: center;
+        }
         .modal-header .modal-time { font-size: 13px; color: #888; }
+        .modal-header .modal-count {
+            font-size: 13px; font-weight: 600; color: #1890ff;
+        }
         .img-container {
             position: relative; display: inline-block; max-width: 100%;
         }
@@ -125,15 +131,32 @@
             border-radius: 4px;
         }
         .box-overlay {
-            position: absolute; border: 2px solid rgba(255, 50, 50, 0.85);
-            background: rgba(255, 50, 50, 0.08);
-            pointer-events: none; border-radius: 2px;
+            position: absolute; border: 2px solid rgba(255, 50, 50, 0.55);
+            background: rgba(255, 50, 50, 0.05);
+            pointer-events: auto; border-radius: 2px;
+            cursor: pointer; transition: all 0.15s;
         }
-        .box-label {
-            position: absolute; top: -20px; left: 0;
-            background: rgba(255, 50, 50, 0.85);
-            color: #fff; font-size: 11px; padding: 1px 5px;
-            white-space: nowrap; border-radius: 2px;
+        .box-overlay:hover {
+            border-color: rgba(255, 50, 50, 1);
+            background: rgba(255, 50, 50, 0.15);
+            z-index: 10;
+        }
+        .box-overlay.high {
+            border-color: rgba(82, 196, 26, 0.55);
+            background: rgba(82, 196, 26, 0.05);
+        }
+        .box-overlay.high:hover {
+            border-color: rgba(82, 196, 26, 1);
+            background: rgba(82, 196, 26, 0.15);
+        }
+        .box-tooltip {
+            position: absolute; z-index: 100;
+            background: rgba(0, 0, 0, 0.85);
+            color: #fff; font-size: 12px; padding: 6px 10px;
+            border-radius: 4px; white-space: nowrap;
+            pointer-events: none;
+            transform: translate(-50%, -100%);
+            margin-top: -8px;
         }
         .modal-footer {
             margin-top: 16px; display: flex;
@@ -153,12 +176,19 @@
             border-bottom: 1px solid #eee;
         }
         .box-list th { background: #fafafa; font-weight: 600; position: sticky; top: 0; }
-        #download-btn {
-            padding: 8px 20px; background: #52c41a; color: #fff;
-            border: none; border-radius: 6px; font-size: 14px;
-            cursor: pointer; transition: background 0.2s; white-space: nowrap;
+        .download-btns {
+            display: flex; flex-direction: column; gap: 8px;
         }
-        #download-btn:hover { background: #45a816; }
+        .download-btns a {
+            padding: 8px 20px; color: #fff; border: none;
+            border-radius: 6px; font-size: 14px; cursor: pointer;
+            transition: background 0.2s; white-space: nowrap;
+            text-decoration: none; text-align: center; display: inline-block;
+        }
+        #download-img-btn { background: #52c41a; }
+        #download-img-btn:hover { background: #45a816; }
+        #download-record-btn { background: #1890ff; }
+        #download-record-btn:hover { background: #1677cc; }
 
         .loading-spinner {
             text-align: center; padding: 40px; color: #888;
@@ -214,7 +244,10 @@
             <button class="modal-close" onclick="closeModal()">&times;</button>
             <div class="modal-header">
                 <h2 id="modal-title">菌落图像</h2>
-                <span class="modal-time" id="modal-time"></span>
+                <div class="modal-info">
+                    <span class="modal-count" id="modal-count"></span>
+                    <span class="modal-time" id="modal-time"></span>
+                </div>
             </div>
             <div class="img-container" id="img-container">
                 <img id="modal-img" src="" alt="菌落图像">
@@ -226,7 +259,10 @@
                         <tbody id="box-tbody"></tbody>
                     </table>
                 </div>
-                <a id="download-btn" href="" download>下载原图</a>
+                <div class="download-btns">
+                    <a id="download-img-btn" href="" download>下载原图</a>
+                    <a id="download-record-btn" href="" download>下载记录</a>
+                </div>
             </div>
         </div>
     </div>
@@ -363,21 +399,53 @@
             var timeStr = formatBeijingFull(x);
 
             document.getElementById('modal-time').textContent = timeStr;
+            document.getElementById('modal-count').textContent = '菌落数: ' + (item.number || 0);
             document.getElementById('modal-title').textContent = '菌落图像 (盘位 ' + document.getElementById('plateid').value + ')';
+
+            if (item.image && item.image.success && item.image.url) {
+                document.getElementById('download-img-btn').href = item.image.url;
+                document.getElementById('download-img-btn').style.display = '';
+            } else {
+                document.getElementById('download-img-btn').href = '#';
+                document.getElementById('download-img-btn').style.display = 'none';
+            }
+
+            if (item.record && item.record.success && item.record.url) {
+                document.getElementById('download-record-btn').href = item.record.url;
+                document.getElementById('download-record-btn').style.display = '';
+            } else {
+                document.getElementById('download-record-btn').href = '#';
+                document.getElementById('download-record-btn').style.display = 'none';
+            }
 
             var container = document.getElementById('img-container');
             var oldOverlays = container.querySelectorAll('.box-overlay');
             for (var k = 0; k < oldOverlays.length; k++) {
                 oldOverlays[k].remove();
             }
+            var oldTooltip = container.querySelector('.box-tooltip');
+            if (oldTooltip) oldTooltip.remove();
 
             var img = document.getElementById('modal-img');
             var tbody = document.getElementById('box-tbody');
             tbody.innerHTML = '';
 
+            var tooltip = document.createElement('div');
+            tooltip.className = 'box-tooltip';
+            tooltip.style.display = 'none';
+            container.appendChild(tooltip);
+
+            img.onload = null;
+
             var loadHandler = function() {
+                var oldBoxes = container.querySelectorAll('.box-overlay');
+                for (var kb = 0; kb < oldBoxes.length; kb++) {
+                    oldBoxes[kb].remove();
+                }
+
                 var displayW = img.clientWidth;
                 var displayH = img.clientHeight;
+                if (displayW === 0 || displayH === 0) return;
                 var scaleX = displayW / 640;
                 var scaleY = displayH / 640;
 
@@ -386,15 +454,19 @@
                         .then(function(r) { return r.text(); })
                         .then(function(text) {
                             tbody.innerHTML = '';
-                            var lines = text.trim().split('\n');
+                            var raw = text.replace(/\r\n/g, '\n');
+                            var lines = raw.split('\n');
                             for (var i = 0; i < lines.length; i++) {
-                                var parts = lines[i].trim().split(/\s+/);
-                                if (parts.length < 5) continue;
+                                var line = lines[i].trim();
+                                if (line === '') continue;
+                                var parts = line.split(/\s+/);
+                                if (parts.length !== 5) continue;
                                 var x1 = parseFloat(parts[0]);
                                 var y1 = parseFloat(parts[1]);
                                 var x2 = parseFloat(parts[2]);
                                 var y2 = parseFloat(parts[3]);
                                 var conf = parseFloat(parts[4]);
+                                if (isNaN(x1) || isNaN(y1) || isNaN(x2) || isNaN(y2) || isNaN(conf)) continue;
 
                                 var left = x1 * scaleX;
                                 var top = y1 * scaleY;
@@ -402,16 +474,28 @@
                                 var height = (y2 - y1) * scaleY;
 
                                 var overlay = document.createElement('div');
-                                overlay.className = 'box-overlay';
+                                overlay.className = conf >= 0.6 ? 'box-overlay high' : 'box-overlay';
                                 overlay.style.left = left + 'px';
                                 overlay.style.top = top + 'px';
                                 overlay.style.width = width + 'px';
                                 overlay.style.height = height + 'px';
 
-                                var label = document.createElement('span');
-                                label.className = 'box-label';
-                                label.textContent = (conf * 100).toFixed(1) + '%';
-                                overlay.appendChild(label);
+                                overlay.addEventListener('mouseenter', (function(bx1, by1, bx2, by2, bconf) {
+                                    return function(e) {
+                                        tooltip.textContent = 'x1:' + bx1.toFixed(0) + ' y1:' + by1.toFixed(0) + ' x2:' + bx2.toFixed(0) + ' y2:' + by2.toFixed(0) + ' ' + (bconf * 100).toFixed(1) + '%';
+                                        tooltip.style.display = 'block';
+                                        positionTooltip(e, tooltip);
+                                    };
+                                })(x1, y1, x2, y2, conf));
+
+                                overlay.addEventListener('mousemove', function(e) {
+                                    tooltip.style.display = 'block';
+                                    positionTooltip(e, tooltip);
+                                });
+
+                                overlay.addEventListener('mouseleave', function() {
+                                    tooltip.style.display = 'none';
+                                });
 
                                 container.appendChild(overlay);
 
@@ -428,21 +512,28 @@
             };
 
             img.onload = loadHandler;
-            if (img.complete) {
-                loadHandler();
-            }
 
             if (item.image && item.image.success && item.image.url) {
                 img.src = item.image.url;
-                document.getElementById('download-btn').href = item.image.url;
+                if (img.complete) {
+                    loadHandler();
+                }
             } else {
                 img.src = '';
-                document.getElementById('download-btn').href = '#';
                 showError('图片不可用');
                 return;
             }
 
             document.getElementById('modal').classList.add('active');
+        }
+
+        function positionTooltip(e, tooltip) {
+            var container = document.getElementById('img-container');
+            var rect = container.getBoundingClientRect();
+            var x = e.clientX - rect.left;
+            var y = e.clientY - rect.top;
+            tooltip.style.left = x + 'px';
+            tooltip.style.top = y + 'px';
         }
 
         function closeModal() {
