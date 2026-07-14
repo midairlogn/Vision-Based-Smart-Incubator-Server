@@ -5,3 +5,7 @@ AGENTS.md
 env.sh
 cmd/scripts
 bin
+*.exe
+*.test
+*.out
+*.log
