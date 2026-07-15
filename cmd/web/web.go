@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"log/slog"
@@ -36,6 +37,7 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/env", handleEnvQuery)
 	mux.HandleFunc("/api/colony", handleColonyQuery)
+	mux.HandleFunc("/api/colony/analyze", handleColonyAnalyze)
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/" {
 			http.Redirect(w, r, "/env.html", http.StatusMovedPermanently)
@@ -161,4 +163,30 @@ func handleColonyQuery(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 	}
 	w.Write([]byte(result))
+}
+
+func handleColonyAnalyze(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, `{"success":false,"message":"method not allowed"}`, http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		UUID      string `json:"uuid"`
+		PlateID   int    `json:"plateid"`
+		Timestamp string `json:"timestamp"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"success":false,"message":"invalid request body"}`, http.StatusBadRequest)
+		return
+	}
+
+	if req.UUID == "" || req.PlateID < 1 || req.Timestamp == "" {
+		http.Error(w, `{"success":false,"message":"missing required params: uuid, plateid, timestamp"}`, http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	result := web.AnalyzeColony(req.UUID, req.PlateID, req.Timestamp)
+	json.NewEncoder(w).Encode(result)
 }

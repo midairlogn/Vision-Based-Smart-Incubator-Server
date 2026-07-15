@@ -85,6 +85,20 @@
       <div class="spinner"></div>
       加载中...
     </div>
+    <div id="colony-summary" class="summary-cards hidden">
+      <div class="summary-card">
+        <div class="summary-label">Total Images</div>
+        <div class="summary-value" id="sum-total-images">--</div>
+      </div>
+      <div class="summary-card">
+        <div class="summary-label">Total Colonies</div>
+        <div class="summary-value" id="sum-total-colonies">--</div>
+      </div>
+      <div class="summary-card">
+        <div class="summary-label">Latest Capture</div>
+        <div class="summary-value" id="sum-latest-time">--</div>
+      </div>
+    </div>
     <div class="grid" id="card-grid"></div>
   </div>
 
@@ -99,13 +113,35 @@
           <span class="modal-time" id="modal-time"></span>
         </div>
       </div>
+      <div class="modal-toolbar">
+        <button class="btn-secondary" id="edit-mode-btn" onclick="toggleEditMode()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          Edit Boxes
+        </button>
+        <button class="btn-secondary hidden" id="delete-box-btn" onclick="deleteSelectedBox()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+          Delete Selected
+        </button>
+        <button class="btn-secondary hidden" id="download-corrected-btn" onclick="downloadCorrectedRecord()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+          Download Corrected
+        </button>
+      </div>
+      <div class="edit-hint hidden" id="edit-hint">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+        Drag on the image to draw a new box. Click a box to select it, then press Delete or click "Delete Selected".
+      </div>
       <div class="img-container" id="img-container">
+        <div class="modal-img-loader" id="modal-img-loader">
+          <div class="spinner"></div>
+          Loading image...
+        </div>
         <img id="modal-img" src="" alt="菌落图像">
       </div>
       <div class="modal-footer">
         <div class="box-list" id="box-list">
           <table>
-            <thead><tr><th>x1</th><th>y1</th><th>x2</th><th>y2</th><th>置信度</th></tr></thead>
+            <thead><tr><th>x1</th><th>y1</th><th>x2</th><th>y2</th><th>Confidence</th></tr></thead>
             <tbody id="box-tbody"></tbody>
           </table>
         </div>
@@ -120,6 +156,19 @@
           </a>
         </div>
       </div>
+      <div class="ai-panel" id="ai-panel">
+        <div class="ai-panel-header">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2z"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+          <span>AI Analysis</span>
+          <button class="btn-secondary" id="ai-analyze-btn" onclick="runAnalyze()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+            Run AI Analysis
+          </button>
+        </div>
+        <div class="ai-panel-body" id="ai-panel-body">
+          <span class="ai-placeholder">No AI analysis available. Click "Run AI Analysis" to generate.</span>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -127,6 +176,13 @@
 <script src="common.js"></script>
 <script>
   var currentData = [];
+  var editMode = false;
+  var boxes = [];
+  var selectedBoxIndex = -1;
+  var isDrawing = false;
+  var drawStart = null;
+  var drawOverlay = null;
+  var currentModalIndex = -1;
 
   async function doQuery(startMicro, endMicro) {
     var uuid = document.getElementById('uuid').value.trim();
@@ -138,6 +194,7 @@
 
     document.getElementById('card-grid').innerHTML = '';
     document.getElementById('loading-spinner').classList.remove('hidden');
+    document.getElementById('colony-summary').classList.add('hidden');
     document.getElementById('query-btn').disabled = true;
 
     try {
@@ -158,6 +215,7 @@
       }
 
       currentData = data.colony;
+      updateSummary(data.colony);
       renderGrid(data.colony);
     } catch (err) {
       showError('请求失败: ' + err.message);
@@ -165,6 +223,23 @@
       document.getElementById('loading-spinner').classList.add('hidden');
       document.getElementById('query-btn').disabled = false;
     }
+  }
+
+  function updateSummary(colonyData) {
+    var totalImages = colonyData.length;
+    var totalColonies = 0;
+    var latestTime = '';
+    for (var i = 0; i < colonyData.length; i++) {
+      totalColonies += (colonyData[i].number || 0);
+      var t = colonyData[i].timestamp;
+      if (!latestTime || t > latestTime) latestTime = t;
+    }
+    document.getElementById('sum-total-images').textContent = totalImages;
+    document.getElementById('sum-total-colonies').textContent = totalColonies;
+    if (latestTime) {
+      document.getElementById('sum-latest-time').textContent = formatBeijingFull(new Date(latestTime).getTime());
+    }
+    document.getElementById('colony-summary').classList.remove('hidden');
   }
 
   async function renderGrid(colonyData) {
@@ -181,15 +256,23 @@
       card.className = 'colony-card';
       card.dataset.index = i;
 
+      var thumbWrap = document.createElement('div');
+      thumbWrap.className = 'card-thumb-wrap';
+      var loader = document.createElement('div');
+      loader.className = 'card-thumb-loader';
+      loader.innerHTML = '<div class="spinner"></div>';
+      thumbWrap.appendChild(loader);
       var img = document.createElement('img');
       img.className = 'card-thumb';
       img.alt = timeStr;
-      card.appendChild(img);
+      thumbWrap.appendChild(img);
+      card.appendChild(thumbWrap);
 
       var body = document.createElement('div');
       body.className = 'card-body';
+      var aiBadge = item.reply ? '<span class="ai-badge">AI</span>' : '';
       body.innerHTML = '<div class="time">' + timeStr + '</div>' +
-                       '<div class="count"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>菌落数: ' + (item.number || 0) + '</div>';
+                       '<div class="count"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>菌落数: ' + (item.number || 0) + ' ' + aiBadge + '</div>';
       card.appendChild(body);
 
       card.addEventListener('click', function(idx) {
@@ -197,14 +280,22 @@
       }(i));
 
       grid.appendChild(card);
-      cards.push({card: card, img: img, item: item});
+      cards.push({card: card, img: img, loader: loader, item: item});
     }
 
     for (var i = 0; i < cards.length; i++) {
       var c = cards[i];
       if (c.item.image && c.item.image.success && c.item.image.url) {
+        c.img.onload = function(loader) {
+          return function() { loader.classList.add('loaded'); };
+        }(c.loader);
+        c.img.onerror = function(loader) {
+          return function() { loader.classList.add('loaded'); };
+        }(c.loader);
         c.img.src = c.item.image.url;
+        if (c.img.complete) { c.loader.classList.add('loaded'); }
       } else {
+        c.loader.classList.add('loaded');
         c.img.alt = '图片不可用';
         c.img.style.objectFit = 'contain';
         c.img.style.padding = '24px';
@@ -213,8 +304,115 @@
     }
   }
 
+  function getScale() {
+    var img = document.getElementById('modal-img');
+    var displayW = img.clientWidth;
+    var displayH = img.clientHeight;
+    if (displayW === 0 || displayH === 0) {
+      displayW = img.naturalWidth;
+      displayH = img.naturalHeight;
+    }
+    return {
+      scaleX: displayW / img.naturalWidth,
+      scaleY: displayH / img.naturalHeight,
+      displayW: displayW,
+      displayH: displayH
+    };
+  }
+
+  function clearOverlays() {
+    var container = document.getElementById('img-container');
+    var oldOverlays = container.querySelectorAll('.box-overlay, .draw-overlay');
+    for (var k = 0; k < oldOverlays.length; k++) {
+      oldOverlays[k].remove();
+    }
+    var oldTooltip = container.querySelector('.box-tooltip');
+    if (oldTooltip) oldTooltip.remove();
+  }
+
+  function renderBoxes() {
+    clearOverlays();
+    var container = document.getElementById('img-container');
+    var img = document.getElementById('modal-img');
+    var scale = getScale();
+
+    var tooltip = document.createElement('div');
+    tooltip.className = 'box-tooltip';
+    tooltip.style.display = 'none';
+    container.appendChild(tooltip);
+
+    for (var i = 0; i < boxes.length; i++) {
+      var b = boxes[i];
+      var left = b.x1 * scale.scaleX;
+      var top = b.y1 * scale.scaleY;
+      var width = (b.x2 - b.x1) * scale.scaleX;
+      var height = (b.y2 - b.y1) * scale.scaleY;
+
+      var overlay = document.createElement('div');
+      overlay.className = 'box-overlay';
+      if (b.conf >= 0.6) overlay.classList.add('high');
+      if (i === selectedBoxIndex) overlay.classList.add('selected');
+      overlay.style.left = left + 'px';
+      overlay.style.top = top + 'px';
+      overlay.style.width = width + 'px';
+      overlay.style.height = height + 'px';
+      overlay.dataset.boxIndex = i;
+
+      overlay.addEventListener('click', (function(idx) {
+        return function(e) {
+          e.stopPropagation();
+          if (editMode) {
+            selectedBoxIndex = (selectedBoxIndex === idx) ? -1 : idx;
+            renderBoxes();
+            updateBoxTable();
+          }
+        };
+      })(i));
+
+      overlay.addEventListener('mouseenter', (function(bx1, by1, bx2, by2, bconf) {
+        return function(e) {
+          tooltip.textContent = 'x1:' + bx1.toFixed(0) + ' y1:' + by1.toFixed(0) + ' x2:' + bx2.toFixed(0) + ' y2:' + by2.toFixed(0) + ' ' + (bconf * 100).toFixed(1) + '%';
+          tooltip.style.display = 'block';
+          positionTooltip(e, tooltip);
+        };
+      })(b.x1, b.y1, b.x2, b.y2, b.conf));
+
+      overlay.addEventListener('mousemove', function(e) {
+        tooltip.style.display = 'block';
+        positionTooltip(e, tooltip);
+      });
+
+      overlay.addEventListener('mouseleave', function() {
+        tooltip.style.display = 'none';
+      });
+
+      container.appendChild(overlay);
+    }
+  }
+
+  function updateBoxTable() {
+    var tbody = document.getElementById('box-tbody');
+    tbody.innerHTML = '';
+    for (var i = 0; i < boxes.length; i++) {
+      var b = boxes[i];
+      var row = document.createElement('tr');
+      if (i === selectedBoxIndex) row.classList.add('selected-row');
+      row.innerHTML = '<td>' + b.x1.toFixed(1) + '</td><td>' + b.y1.toFixed(1) + '</td><td>' + b.x2.toFixed(1) + '</td><td>' + b.y2.toFixed(1) + '</td><td>' + (b.conf >= 0 ? (b.conf * 100).toFixed(1) + '%' : 'manual') + '</td>';
+      row.addEventListener('click', (function(idx) {
+        return function() {
+          selectedBoxIndex = (selectedBoxIndex === idx) ? -1 : idx;
+          renderBoxes();
+          updateBoxTable();
+        };
+      })(i));
+      tbody.appendChild(row);
+    }
+    document.getElementById('modal-count').textContent = '菌落数: ' + boxes.length;
+  }
+
   async function openModal(index) {
     var item = currentData[index];
+    currentModalIndex = index;
     var x = new Date(item.timestamp).getTime();
     var timeStr = formatBeijingFull(x);
 
@@ -238,49 +436,46 @@
       document.getElementById('download-record-btn').style.display = 'none';
     }
 
-    var container = document.getElementById('img-container');
-    var oldOverlays = container.querySelectorAll('.box-overlay');
-    for (var k = 0; k < oldOverlays.length; k++) {
-      oldOverlays[k].remove();
+    editMode = false;
+    selectedBoxIndex = -1;
+    boxes = [];
+    document.getElementById('edit-mode-btn').classList.remove('active');
+    document.getElementById('edit-hint').classList.add('hidden');
+    document.getElementById('delete-box-btn').classList.add('hidden');
+    document.getElementById('download-corrected-btn').classList.add('hidden');
+
+    // AI panel
+    var aiBody = document.getElementById('ai-panel-body');
+    if (item.reply) {
+      aiBody.innerHTML = '<div class="ai-reply">' + escapeHtml(item.reply) + '</div>';
+      document.getElementById('ai-analyze-btn').style.display = 'none';
+    } else {
+      aiBody.innerHTML = '<span class="ai-placeholder">No AI analysis available. Click "Run AI Analysis" to generate.</span>';
+      document.getElementById('ai-analyze-btn').style.display = '';
     }
-    var oldTooltip = container.querySelector('.box-tooltip');
-    if (oldTooltip) oldTooltip.remove();
+
+    var tbody = document.getElementById('box-tbody');
+    tbody.innerHTML = '<tr><td colspan="5" class="table-loading-cell"><div class="spinner"></div> Loading...</td></tr>';
+
+    clearOverlays();
 
     var img = document.getElementById('modal-img');
-    var tbody = document.getElementById('box-tbody');
-    tbody.innerHTML = '';
-
-    var tooltip = document.createElement('div');
-    tooltip.className = 'box-tooltip';
-    tooltip.style.display = 'none';
-    container.appendChild(tooltip);
-
+    var imgLoader = document.getElementById('modal-img-loader');
     var loadFired = false;
 
     var loadHandler = function() {
       if (loadFired) return;
       loadFired = true;
 
-      var oldBoxes = container.querySelectorAll('.box-overlay');
-      for (var kb = 0; kb < oldBoxes.length; kb++) {
-        oldBoxes[kb].remove();
-      }
+      imgLoader.classList.add('loaded');
 
-      var displayW = img.clientWidth;
-      var displayH = img.clientHeight;
-      if (displayW === 0 || displayH === 0) {
-        displayW = img.naturalWidth;
-        displayH = img.naturalHeight;
-      }
-      if (displayW === 0 || displayH === 0) return;
-      var scaleX = displayW / img.naturalWidth;
-      var scaleY = displayH / img.naturalHeight;
+      clearOverlays();
 
       if (item.record && item.record.success && item.record.url) {
         fetch(item.record.url)
           .then(function(r) { return r.text(); })
           .then(function(text) {
-            tbody.innerHTML = '';
+            boxes = [];
             var raw = text.replace(/\r\n/g, '\n');
             var lines = raw.split('\n');
             for (var i = 0; i < lines.length; i++) {
@@ -294,46 +489,14 @@
               var y2 = parseFloat(parts[3]);
               var conf = parseFloat(parts[4]);
               if (isNaN(x1) || isNaN(y1) || isNaN(x2) || isNaN(y2) || isNaN(conf)) continue;
-
-              var left = x1 * scaleX;
-              var top = y1 * scaleY;
-              var width = (x2 - x1) * scaleX;
-              var height = (y2 - y1) * scaleY;
-
-              var overlay = document.createElement('div');
-              overlay.className = conf >= 0.6 ? 'box-overlay high' : 'box-overlay';
-              overlay.style.left = left + 'px';
-              overlay.style.top = top + 'px';
-              overlay.style.width = width + 'px';
-              overlay.style.height = height + 'px';
-
-              overlay.addEventListener('mouseenter', (function(bx1, by1, bx2, by2, bconf) {
-                return function(e) {
-                  tooltip.textContent = 'x1:' + bx1.toFixed(0) + ' y1:' + by1.toFixed(0) + ' x2:' + bx2.toFixed(0) + ' y2:' + by2.toFixed(0) + ' ' + (bconf * 100).toFixed(1) + '%';
-                  tooltip.style.display = 'block';
-                  positionTooltip(e, tooltip);
-                };
-              })(x1, y1, x2, y2, conf));
-
-              overlay.addEventListener('mousemove', function(e) {
-                tooltip.style.display = 'block';
-                positionTooltip(e, tooltip);
-              });
-
-              overlay.addEventListener('mouseleave', function() {
-                tooltip.style.display = 'none';
-              });
-
-              container.appendChild(overlay);
-
-              var row = document.createElement('tr');
-              row.innerHTML = '<td>' + x1.toFixed(1) + '</td><td>' + y1.toFixed(1) + '</td><td>' + x2.toFixed(1) + '</td><td>' + y2.toFixed(1) + '</td><td>' + (conf * 100).toFixed(1) + '%</td>';
-              tbody.appendChild(row);
+              boxes.push({x1: x1, y1: y1, x2: x2, y2: y2, conf: conf});
             }
+            renderBoxes();
+            updateBoxTable();
           })
           .catch(function(err) {
             console.error('Failed to fetch record:', err);
-            tbody.innerHTML = '<tr><td colspan="5">无法加载识别数据</td></tr>';
+            document.getElementById('box-tbody').innerHTML = '<tr><td colspan="5">无法加载识别数据</td></tr>';
           });
       }
     };
@@ -343,16 +506,207 @@
     document.getElementById('modal').classList.add('active');
 
     if (item.image && item.image.success && item.image.url) {
+      imgLoader.classList.remove('loaded');
       img.onload = loadHandler;
+      img.onerror = function() { imgLoader.classList.add('loaded'); };
       img.src = item.image.url;
       if (img.complete && img.naturalWidth > 0) {
         loadHandler();
       }
     } else {
+      imgLoader.classList.add('loaded');
       img.src = '';
       showError('图片不可用');
       return;
     }
+  }
+
+  function toggleEditMode() {
+    editMode = !editMode;
+    var btn = document.getElementById('edit-mode-btn');
+    var hint = document.getElementById('edit-hint');
+    var delBtn = document.getElementById('delete-box-btn');
+    var dlBtn = document.getElementById('download-corrected-btn');
+
+    if (editMode) {
+      btn.classList.add('active');
+      hint.classList.remove('hidden');
+      delBtn.classList.remove('hidden');
+      dlBtn.classList.remove('hidden');
+      enableDrawing();
+    } else {
+      btn.classList.remove('active');
+      hint.classList.add('hidden');
+      delBtn.classList.add('hidden');
+      selectedBoxIndex = -1;
+      renderBoxes();
+      updateBoxTable();
+      disableDrawing();
+    }
+  }
+
+  function enableDrawing() {
+    var container = document.getElementById('img-container');
+    container.style.cursor = 'crosshair';
+    container.addEventListener('mousedown', onDrawStart);
+    container.addEventListener('mousemove', onDrawMove);
+    container.addEventListener('mouseup', onDrawEnd);
+    document.addEventListener('keydown', onKeyDown);
+  }
+
+  function disableDrawing() {
+    var container = document.getElementById('img-container');
+    container.style.cursor = '';
+    container.removeEventListener('mousedown', onDrawStart);
+    container.removeEventListener('mousemove', onDrawMove);
+    container.removeEventListener('mouseup', onDrawEnd);
+    document.removeEventListener('keydown', onKeyDown);
+    if (drawOverlay) { drawOverlay.remove(); drawOverlay = null; }
+    isDrawing = false;
+  }
+
+  function onDrawStart(e) {
+    if (!editMode) return;
+    if (e.target.classList.contains('box-overlay')) return;
+    var container = document.getElementById('img-container');
+    var rect = container.getBoundingClientRect();
+    isDrawing = true;
+    drawStart = {
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top
+    };
+    drawOverlay = document.createElement('div');
+    drawOverlay.className = 'box-overlay drawing';
+    drawOverlay.style.left = drawStart.x + 'px';
+    drawOverlay.style.top = drawStart.y + 'px';
+    drawOverlay.style.width = '0px';
+    drawOverlay.style.height = '0px';
+    container.appendChild(drawOverlay);
+  }
+
+  function onDrawMove(e) {
+    if (!isDrawing || !drawOverlay) return;
+    var container = document.getElementById('img-container');
+    var rect = container.getBoundingClientRect();
+    var curX = e.clientX - rect.left;
+    var curY = e.clientY - rect.top;
+    var left = Math.min(drawStart.x, curX);
+    var top = Math.min(drawStart.y, curY);
+    var width = Math.abs(curX - drawStart.x);
+    var height = Math.abs(curY - drawStart.y);
+    drawOverlay.style.left = left + 'px';
+    drawOverlay.style.top = top + 'px';
+    drawOverlay.style.width = width + 'px';
+    drawOverlay.style.height = height + 'px';
+  }
+
+  function onDrawEnd(e) {
+    if (!isDrawing || !drawOverlay) return;
+    isDrawing = false;
+    var container = document.getElementById('img-container');
+    var img = document.getElementById('modal-img');
+    var scale = getScale();
+
+    var left = parseFloat(drawOverlay.style.left);
+    var top = parseFloat(drawOverlay.style.top);
+    var width = parseFloat(drawOverlay.style.width);
+    var height = parseFloat(drawOverlay.style.height);
+
+    drawOverlay.remove();
+    drawOverlay = null;
+
+    if (width < 5 || height < 5) return;
+
+    var x1 = left / scale.scaleX;
+    var y1 = top / scale.scaleY;
+    var x2 = (left + width) / scale.scaleX;
+    var y2 = (top + height) / scale.scaleY;
+
+    boxes.push({x1: x1, y1: y1, x2: x2, y2: y2, conf: -1});
+    selectedBoxIndex = boxes.length - 1;
+    renderBoxes();
+    updateBoxTable();
+  }
+
+  function onKeyDown(e) {
+    if (!editMode) return;
+    if (e.key === 'Delete' || e.key === 'Backspace') {
+      if (selectedBoxIndex >= 0 && selectedBoxIndex < boxes.length) {
+        e.preventDefault();
+        deleteSelectedBox();
+      }
+    }
+  }
+
+  function deleteSelectedBox() {
+    if (selectedBoxIndex < 0 || selectedBoxIndex >= boxes.length) return;
+    boxes.splice(selectedBoxIndex, 1);
+    selectedBoxIndex = -1;
+    renderBoxes();
+    updateBoxTable();
+  }
+
+  function downloadCorrectedRecord() {
+    if (boxes.length === 0) return;
+    var lines = [];
+    for (var i = 0; i < boxes.length; i++) {
+      var b = boxes[i];
+      var conf = b.conf >= 0 ? b.conf : 0;
+      lines.push(b.x1.toFixed(1) + ' ' + b.y1.toFixed(1) + ' ' + b.x2.toFixed(1) + ' ' + b.y2.toFixed(1) + ' ' + conf.toFixed(2));
+    }
+    var text = lines.join('\n');
+    var blob = new Blob([text], {type: 'text/plain'});
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'corrected_record.txt';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  async function runAnalyze() {
+    if (currentModalIndex < 0) return;
+    var item = currentData[currentModalIndex];
+    var uuid = document.getElementById('uuid').value.trim();
+    var plateid = parseInt(document.getElementById('plateid').value.trim());
+    var ts = item.timestamp.replace('T', '-').replace(/:/g, '-').split('.')[0];
+    var parts = ts.split('-');
+    var timestamp = parts[0] + parts[1] + parts[2] + '-' + parts[3] + parts[4] + parts[5];
+
+    var btn = document.getElementById('ai-analyze-btn');
+    var body = document.getElementById('ai-panel-body');
+    btn.disabled = true;
+    btn.textContent = 'Analyzing...';
+    body.innerHTML = '<div class="ai-loading"><div class="spinner"></div>Running AI analysis, please wait...</div>';
+
+    try {
+      var resp = await fetch('/api/colony/analyze', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({uuid: uuid, plateid: plateid, timestamp: timestamp})
+      });
+      var data = await resp.json();
+      if (data.success && data.reply) {
+        body.innerHTML = '<div class="ai-reply">' + escapeHtml(data.reply) + '</div>';
+        item.reply = data.reply;
+        btn.style.display = 'none';
+      } else {
+        body.innerHTML = '<span class="ai-error">Analysis failed: ' + escapeHtml(data.message || 'Unknown error') + '</span>';
+      }
+    } catch (err) {
+      body.innerHTML = '<span class="ai-error">Request failed: ' + escapeHtml(err.message) + '</span>';
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Run AI Analysis';
+    }
+  }
+
+  function escapeHtml(text) {
+    var div = document.createElement('div');
+    div.appendChild(document.createTextNode(text));
+    return div.innerHTML.replace(/\n/g, '<br>');
   }
 
   function positionTooltip(e, tooltip) {
@@ -366,6 +720,10 @@
 
   function closeModal() {
     document.getElementById('modal').classList.remove('active');
+    if (editMode) {
+      editMode = false;
+      disableDrawing();
+    }
   }
 
   document.getElementById('modal').addEventListener('click', function(e) {
