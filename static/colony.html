@@ -498,6 +498,8 @@
             console.error('Failed to fetch record:', err);
             document.getElementById('box-tbody').innerHTML = '<tr><td colspan="5">无法加载识别数据</td></tr>';
           });
+      } else {
+        document.getElementById('box-tbody').innerHTML = '<tr><td colspan="5">识别数据不可用</td></tr>';
       }
     };
 
@@ -508,7 +510,10 @@
     if (item.image && item.image.success && item.image.url) {
       imgLoader.classList.remove('loaded');
       img.onload = loadHandler;
-      img.onerror = function() { imgLoader.classList.add('loaded'); };
+      img.onerror = function() {
+        imgLoader.classList.add('loaded');
+        document.getElementById('box-tbody').innerHTML = '<tr><td colspan="5">图片加载失败，无法显示识别数据</td></tr>';
+      };
       img.src = item.image.url;
       if (img.complete && img.naturalWidth > 0) {
         loadHandler();
@@ -671,9 +676,7 @@
     var item = currentData[currentModalIndex];
     var uuid = document.getElementById('uuid').value.trim();
     var plateid = parseInt(document.getElementById('plateid').value.trim());
-    var ts = item.timestamp.replace('T', '-').replace(/:/g, '-').split('.')[0];
-    var parts = ts.split('-');
-    var timestamp = parts[0] + parts[1] + parts[2] + '-' + parts[3] + parts[4] + parts[5];
+    var timestamp = formatStoredTimestamp(item.timestamp);
 
     var btn = document.getElementById('ai-analyze-btn');
     var body = document.getElementById('ai-panel-body');
@@ -707,6 +710,16 @@
     var div = document.createElement('div');
     div.appendChild(document.createTextNode(text));
     return div.innerHTML.replace(/\n/g, '<br>');
+  }
+
+  function formatStoredTimestamp(timestamp) {
+    var d = utcMsToBeijing(new Date(timestamp).getTime());
+    return d.getUTCFullYear() +
+      pad2(d.getUTCMonth() + 1) +
+      pad2(d.getUTCDate()) + '-' +
+      pad2(d.getUTCHours()) +
+      pad2(d.getUTCMinutes()) +
+      pad2(d.getUTCSeconds());
   }
 
   function positionTooltip(e, tooltip) {
