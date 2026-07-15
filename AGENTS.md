@@ -34,7 +34,7 @@ Use `ENV_MEASURE_NAME` / `COLONY_MEASURE_NAME` for Tablestore measurement names;
 
 Two separate `main` packages — not a single entrypoint:
 
-- `cmd/server/listener.go` — MQTT subscriber. Connects to broker via `PORT` env var. Subscribes to `device/#`. Dispatches to `utils.OnDataReceived` (env data → Tablestore), `utils.OnUploadRequest` (upload → OSS presign + MQTT reply + colony record), and `utils.SendAlert` for warn messages.
+- `cmd/server/listener.go` — MQTT subscriber. Connects to broker via `PORT` env var. Subscribes to `device/#`. Dispatches to `utils.OnDataReceived` (env data → Tablestore), `utils.OnUploadRequest` (upload → OSS presign + MQTT reply + colony record), `device/{uuid}/warn` → `utils.SendAlert` (email), and handles `device/{uuid}/time` (server time reply).
 
 - `cmd/web/web.go` — HTTP server on `:8080`. Serves static files from `static/` and exposes `/api/env` and `/api/colony` JSON endpoints.
 
@@ -42,7 +42,7 @@ Two separate `main` packages — not a single entrypoint:
 
 - `web/` — Query functions `GetEnv()` and `GetColony()` called by the web handler.
 
-- `static/` — Frontend HTML (Chart.js for env data, colony image viewer).
+- `static/` — Frontend HTML (Chart.js for env data, colony image viewer) plus shared CSS and JS.
 
 ## Quirks & Gotchas
 

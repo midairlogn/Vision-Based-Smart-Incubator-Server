@@ -31,6 +31,7 @@
 - **环境数据采集** — 订阅 `device/{uuid}/data` 主题，将温度/湿度写入 Tablestore `env` 表
 - **上传 URL 签发** — 订阅 `device/{uuid}/upload` 主题，为图片和记录文件生成 OSS 预签名上传 URL，通过 MQTT 回复给设备
 - **菌落数据记录** — 在文件上传请求时同步将文件路径、菌落数写入 Tablestore `colony` 表
+- **杂菌告警** — 订阅 `device/{uuid}/warn` 主题，触发邮件告警通知用户关注
 - **Web 数据查询** — 提供 `/api/env` 和 `/api/colony` 两个 JSON API，前端使用 Chart.js 展示温度/湿度曲线和菌落图像
 
 ## 快速开始
@@ -130,6 +131,15 @@ chmod +x start.sh
 
 > 不启用邮件告警时，这一组变量可以不填。
 
+### Bailian AI 推理（可选）
+
+| 变量 | 说明 |
+|---|---|
+| `DASHSCOPE_API_KEY` | 百炼平台 API Key |
+| `MODEL_NAME` | 推理模型名称，如 `qwen3.6-plus` |
+
+> 用于菌落图像的 AI 杂菌识别推理。该功能代码存在但当前未在主流程中调用。
+
 ## API 文档
 
 ### 查询环境数据
@@ -144,7 +154,7 @@ GET /api/env?uuid=<设备UUID>&start=<起始微秒>&end=<结束微秒>
 {
   "sucess": true,
   "env": [
-    {"timestamp": "2026-06-27 12:00:00", "temp": 37.5, "hum": 65.2}
+    {"timestamp": "2026-06-27T12:00:00Z", "temp": 37.5, "hum": 65.2}
   ]
 }
 ```
@@ -164,7 +174,7 @@ GET /api/colony?uuid=<设备UUID>&plateid=<盘位号>&start=<起始微秒>&end=<
   "success": true,
   "colony": [
     {
-      "timestamp": "2026-06-27 12:00:00",
+      "timestamp": "2026-06-27T12:00:00Z",
       "number": 15,
       "image": {"success": true, "url": "https://...oss预签名地址..."},
       "record": {"success": true, "url": "https://...oss预签名地址..."}
@@ -183,18 +193,22 @@ GET /api/colony?uuid=<设备UUID>&plateid=<盘位号>&start=<起始微秒>&end=<
 │   └── web/web.go            # Web 服务器（main 入口）
 ├── static/
 │   ├── env.html              # 环境数据仪表板（Chart.js 折线图）
-│   └── colony.html           # 菌落图像查看器（缩略图 + 边界框叠加）
+│   ├── colony.html           # 菌落图像查看器（缩略图 + 边界框叠加）
+│   ├── common.js             # 前端共用工具函数（时间转换、查询逻辑）
+│   └── common.css            # 前端共用样式（设计系统）
 ├── utils/
 │   ├── oss_utils.go          # OSS 预签名 URL 生成 + MQTT 回复
 │   ├── tablestorage_utils.go # Tablestore 读写（env / colony 表）
-│   ├── bailian_utils.go      # Bailian AI 推理
+│   ├── bailian_utils.go      # Bailian AI 推理（当前未在主流程调用）
 │   └── mail_utils.go         # 邮件告警
 ├── web/
 │   ├── env.go                # /api/env 查询逻辑
 │   └── clonony.go            # /api/colony 查询逻辑
 ├── go.mod / go.sum           # Go 模块依赖
 ├── .env.example              # 环境变量模板（可提交）
-└── .env                      # 环境变量（已 gitignore，请勿提交！）
+├── .env                      # 环境变量（已 gitignore，请勿提交！）
+├── start.sh                  # Linux 一键启动脚本（构建 + 启动两个服务）
+└── build.sh                  # 仅构建两个二进制文件
 ```
 
 ## MQTT 消息协议
@@ -234,6 +248,12 @@ GET /api/colony?uuid=<设备UUID>&plateid=<盘位号>&start=<起始微秒>&end=<
 主题：`server/{uuid}/time`
 
 回复当前服务器 Unix 时间戳（秒）。
+
+### 设备告警
+
+主题：`device/{uuid}/warn`
+
+设备发送杂菌警告，服务端收到后通过邮件通知用户。
 
 ## 技术栈
 
