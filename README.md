@@ -59,6 +59,17 @@ go build -o bin/web ./cmd/web/
 
 ### 运行
 
+Linux 服务器上一键启动两个后端：
+
+```bash
+chmod +x start.sh
+./start.sh
+```
+
+脚本会构建 `bin/listener` 和 `bin/web`，同时启动 MQTT 订阅者和 Web 服务，并将日志写入 `logs/listener.log` 与 `logs/web.log`。按 `Ctrl+C` 会同时停止两个服务。
+
+也可以分别启动：
+
 终端 1 — MQTT 订阅者（生产服务）：
 
 ```bash
