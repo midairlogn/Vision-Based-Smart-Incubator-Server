@@ -550,6 +550,16 @@ body {
   width: 100% !important;
 }
 
+.chart-hint {
+  padding: 42px 24px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 14px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+}
+
 /* ---- Table Container ---- */
 .table-card {
   background: var(--bg-card);
