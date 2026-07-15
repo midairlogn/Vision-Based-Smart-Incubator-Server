@@ -435,9 +435,12 @@
             tooltip.style.display = 'none';
             container.appendChild(tooltip);
 
-            img.onload = null;
+            var loadFired = false;
 
             var loadHandler = function() {
+                if (loadFired) return;
+                loadFired = true;
+
                 var oldBoxes = container.querySelectorAll('.box-overlay');
                 for (var kb = 0; kb < oldBoxes.length; kb++) {
                     oldBoxes[kb].remove();
@@ -445,12 +448,16 @@
 
                 var displayW = img.clientWidth;
                 var displayH = img.clientHeight;
+                if (displayW === 0 || displayH === 0) {
+                    displayW = img.naturalWidth;
+                    displayH = img.naturalHeight;
+                }
                 if (displayW === 0 || displayH === 0) return;
-                var scaleX = displayW / 640;
-                var scaleY = displayH / 640;
+                var scaleX = displayW / img.naturalWidth;
+                var scaleY = displayH / img.naturalHeight;
 
                 if (item.record && item.record.success && item.record.url) {
-                    fetch(item.record.url)
+                    fetch(item.record.url + '?t=' + Date.now())
                         .then(function(r) { return r.text(); })
                         .then(function(text) {
                             tbody.innerHTML = '';
@@ -511,11 +518,14 @@
                 }
             };
 
-            img.onload = loadHandler;
+            img.onload = null;
+
+            document.getElementById('modal').classList.add('active');
 
             if (item.image && item.image.success && item.image.url) {
+                img.onload = loadHandler;
                 img.src = item.image.url;
-                if (img.complete) {
+                if (img.complete && img.naturalWidth > 0) {
                     loadHandler();
                 }
             } else {
@@ -523,8 +533,6 @@
                 showError('图片不可用');
                 return;
             }
-
-            document.getElementById('modal').classList.add('active');
         }
 
         function positionTooltip(e, tooltip) {

@@ -1,15 +1,30 @@
 package main
 
 import (
+	"fmt"
 	"log"
+	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"mqtt_listener/web"
 
 	"github.com/joho/godotenv"
 )
+
+func recoverMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			if err := recover(); err != nil {
+				slog.Error(fmt.Sprintf("Panic recovered: %v", err))
+				http.Error(w, `{"sucess":false,"message":"internal server error"}`, http.StatusInternalServerError)
+			}
+		}()
+		next.ServeHTTP(w, r)
+	})
+}
 
 func main() {
 	if err := godotenv.Load(); err != nil {
@@ -18,9 +33,10 @@ func main() {
 
 	fs := http.FileServer(http.Dir("static"))
 
-	http.HandleFunc("/api/env", handleEnvQuery)
-	http.HandleFunc("/api/colony", handleColonyQuery)
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/env", handleEnvQuery)
+	mux.HandleFunc("/api/colony", handleColonyQuery)
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/" {
 			http.Redirect(w, r, "/env.html", http.StatusMovedPermanently)
 			return
@@ -28,11 +44,28 @@ func main() {
 		fs.ServeHTTP(w, r)
 	})
 
+	handler := recoverMiddleware(mux)
+
 	log.Println("web server starting on :8080")
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	server := &http.Server{
+		Addr:              ":8080",
+		Handler:           handler,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		ReadHeaderTimeout: 10 * time.Second,
+		IdleTimeout:       120 * time.Second,
+	}
+	if err := server.ListenAndServe(); err != nil {
+		log.Fatalf("Web server failed: %v", err)
+	}
 }
 
 func handleEnvQuery(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, `{"sucess":false,"message":"method not allowed"}`, http.StatusMethodNotAllowed)
+		return
+	}
+
 	uuid := r.URL.Query().Get("uuid")
 	startStr := r.URL.Query().Get("start")
 	endStr := r.URL.Query().Get("end")
@@ -54,14 +87,33 @@ func handleEnvQuery(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if startMicro >= endMicro {
+		http.Error(w, `{"sucess":false,"message":"start must be before end"}`, http.StatusBadRequest)
+		return
+	}
+
+	if endMicro-startMicro > 7*24*3600*1000000 {
+		http.Error(w, `{"sucess":false,"message":"time range exceeds 7 days"}`, http.StatusBadRequest)
+		return
+	}
+
 	start := time.UnixMicro(startMicro)
 	end := time.UnixMicro(endMicro)
 
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.Write([]byte(web.GetEnv(uuid, start, end)))
+	result := web.GetEnv(uuid, start, end)
+	if strings.Contains(result, `"sucess":false`) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}
+	w.Write([]byte(result))
 }
 
 func handleColonyQuery(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, `{"success":false,"message":"method not allowed"}`, http.StatusMethodNotAllowed)
+		return
+	}
+
 	uuid := r.URL.Query().Get("uuid")
 	plateidStr := r.URL.Query().Get("plateid")
 	startStr := r.URL.Query().Get("start")
@@ -73,7 +125,7 @@ func handleColonyQuery(w http.ResponseWriter, r *http.Request) {
 	}
 
 	plateid, err := strconv.Atoi(plateidStr)
-	if err != nil {
+	if err != nil || plateid < 1 {
 		http.Error(w, `{"success":false,"message":"invalid plateid param"}`, http.StatusBadRequest)
 		return
 	}
@@ -90,9 +142,23 @@ func handleColonyQuery(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if startMicro >= endMicro {
+		http.Error(w, `{"success":false,"message":"start must be before end"}`, http.StatusBadRequest)
+		return
+	}
+
+	if endMicro-startMicro > 7*24*3600*1000000 {
+		http.Error(w, `{"success":false,"message":"time range exceeds 7 days"}`, http.StatusBadRequest)
+		return
+	}
+
 	start := time.UnixMicro(startMicro)
 	end := time.UnixMicro(endMicro)
 
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.Write([]byte(web.GetColony(uuid, plateid, start, end)))
+	result := web.GetColony(uuid, plateid, start, end)
+	if strings.Contains(result, `"success":false`) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}
+	w.Write([]byte(result))
 }

@@ -39,7 +39,7 @@
 
 - Go 1.26+
 - 阿里云 OSS 和 Tablestore 服务（需提前创建好实例和数据表）
-- MQTT Broker（如 Mosquitto），监听 `tcp://localhost:1883`
+- MQTT Broker（如 Mosquitto），监听地址通过 `PORT` 环境变量配置
 
 ### 配置
 
@@ -105,6 +105,17 @@ go build -o bin/web ./cmd/web/
 |---|---|
 | `USERNAME` | Broker 用户名 |
 | `PASSWORD` | Broker 密码 |
+| `PORT` | Broker 连接地址，如 `tcp://localhost:1883` |
+
+### 邮件告警（可选）
+
+| 变量 | 说明 |
+|---|---|
+| `SMTP_HOST` | SMTP 服务器地址，默认 `smtp.qq.com` |
+| `SMTP_PORT` | SMTP 端口，默认 `465` |
+| `SRC_EMAIL` | 发件人邮箱 |
+| `DEST_EMAIL` | 收件人邮箱 |
+| `AUTHCODE` | SMTP 授权码 |
 
 ## API 文档
 
@@ -162,7 +173,9 @@ GET /api/colony?uuid=<设备UUID>&plateid=<盘位号>&start=<起始微秒>&end=<
 │   └── colony.html           # 菌落图像查看器（缩略图 + 边界框叠加）
 ├── utils/
 │   ├── oss_utils.go          # OSS 预签名 URL 生成 + MQTT 回复
-│   └── tablestorage_utils.go # Tablestore 读写（env / colony 表）
+│   ├── tablestorage_utils.go # Tablestore 读写（env / colony 表）
+│   ├── bailian_utils.go      # Bailian AI 推理
+│   └── mail_utils.go         # 邮件告警
 ├── web/
 │   ├── env.go                # /api/env 查询逻辑
 │   └── clonony.go            # /api/colony 查询逻辑
@@ -178,8 +191,10 @@ GET /api/colony?uuid=<设备UUID>&plateid=<盘位号>&start=<起始微秒>&end=<
 主题：`device/{uuid}/data`
 
 ```json
-{"timestamp": "2026-06-27 12:00:00", "temp": 37.5, "hum": 65.2}
+{"timestamp": "20060102-150405", "temp": 37.5, "hum": 65.2}
 ```
+
+> timestamp 格式为 `YYYYMMDD-HHMMSS`，时区为 `Asia/Shanghai`。
 
 服务端收到后写入 Tablestore `env` 表，时间戳截断到整秒。
 
@@ -188,7 +203,7 @@ GET /api/colony?uuid=<设备UUID>&plateid=<盘位号>&start=<起始微秒>&end=<
 主题：`device/{uuid}/upload`
 
 ```json
-{"timestamp": "2026-06-27 12:00:00", "plateid": 1, "imgpath": "/local/photo.jpg", "txtpath": "/local/result.txt", "number": 15}
+{"timestamp": "20060102-150405", "plateid": 1, "imgpath": "/local/photo.jpg", "txtpath": "/local/result.txt", "number": 15}
 ```
 
 服务端生成 OSS 预签名 PutObject URL，通过以下主题回复：
@@ -196,10 +211,16 @@ GET /api/colony?uuid=<设备UUID>&plateid=<盘位号>&start=<起始微秒>&end=<
 主题：`server/{uuid}/upload`
 
 ```json
-{"timestamp": "2026-06-27 12:00:00", "success": true, "path": "/local/photo.jpg", "url": "https://oss预签名地址..."}
+{"timestamp": "20060102-150405", "success": true, "path": "/local/photo.jpg", "url": "https://oss预签名地址..."}
 ```
 
 同时将图片路径、记录文件路径、菌落数写入 Tablestore `colony` 表。
+
+### 服务端时间同步
+
+主题：`server/{uuid}/time`
+
+回复当前服务器 Unix 时间戳（秒）。
 
 ## 技术栈
 
@@ -214,7 +235,7 @@ GET /api/colony?uuid=<设备UUID>&plateid=<盘位号>&start=<起始微秒>&end=<
 
 ## 注意事项
 
-- **时区**：所有时间戳使用 `Asia/Shanghai`，格式 `"2006-01-02 15:04:05"`，解析失败时回退为当前时间
+- **时区**：所有 MQTT 时间戳使用 `Asia/Shanghai`，格式 `"20060102-150405"`，解析失败时回退为当前时间
 - **时间精度**：Tablestore 写入时时间戳截断到整秒（微秒值向下取整）
 - **预签名 URL 有效期**：均为 10 分钟
-- **MQTT Broker 地址**：硬编码为 `tcp://localhost:1883`，如需修改请编辑 `cmd/server/listener.go`
+- **MQTT Broker 地址**：通过 `PORT` 环境变量配置，如 `tcp://localhost:1883`
