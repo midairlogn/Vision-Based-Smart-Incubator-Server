@@ -41,7 +41,7 @@
       </div>
       <div class="field">
         <label for="plateid">盘位号</label>
-        <input type="number" id="plateid" placeholder="1" min="1">
+        <input type="number" id="plateid" value="1" min="1" step="1" required inputmode="numeric" oninput="validatePlateIDInput()">
       </div>
     </div>
 
@@ -183,12 +183,14 @@
   var drawStart = null;
   var drawOverlay = null;
   var currentModalIndex = -1;
+  var currentPlateID = '1';
 
   async function doQuery(startMicro, endMicro) {
     var uuid = document.getElementById('uuid').value.trim();
-    var plateid = document.getElementById('plateid').value.trim();
+    var plateid = getValidPlateID();
     if (!uuid) { showError('请输入设备 UUID'); return; }
-    if (!plateid) { showError('请输入盘位号'); return; }
+    if (!plateid) { return; }
+    currentPlateID = plateid;
     hideError();
     hideInfo();
 
@@ -223,6 +225,25 @@
       document.getElementById('loading-spinner').classList.add('hidden');
       document.getElementById('query-btn').disabled = false;
     }
+  }
+
+  function getValidPlateID() {
+    var input = document.getElementById('plateid');
+    var value = input.value.trim();
+    if (!validatePlateIDInput()) {
+      showError('盘位号必须是大于 0 的整数');
+      input.focus();
+      return null;
+    }
+    return value;
+  }
+
+  function validatePlateIDInput() {
+    var input = document.getElementById('plateid');
+    var value = input.value.trim();
+    var valid = /^[1-9]\d*$/.test(value);
+    input.setCustomValidity(valid ? '' : '盘位号必须是大于 0 的整数');
+    return valid;
   }
 
   function updateSummary(colonyData) {
@@ -423,7 +444,7 @@
 
     document.getElementById('modal-time').textContent = timeStr;
     document.getElementById('modal-count').textContent = '菌落数: ' + (item.number || 0);
-    document.getElementById('modal-title').textContent = '菌落图像 (盘位 ' + document.getElementById('plateid').value + ')';
+    document.getElementById('modal-title').textContent = '菌落图像 (盘位 ' + currentPlateID + ')';
 
     if (item.image && item.image.success && item.image.url) {
       document.getElementById('download-img-btn').href = item.image.url;
@@ -688,7 +709,7 @@
     if (currentModalIndex < 0) return;
     var item = currentData[currentModalIndex];
     var uuid = document.getElementById('uuid').value.trim();
-    var plateid = parseInt(document.getElementById('plateid').value.trim());
+    var plateid = parseInt(currentPlateID, 10);
     var timestamp = formatStoredTimestamp(item.timestamp);
 
     var btn = document.getElementById('ai-analyze-btn');

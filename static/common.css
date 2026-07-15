@@ -560,6 +560,13 @@ body {
   background: var(--bg);
 }
 
+.table-empty-cell {
+  padding: 28px 16px !important;
+  text-align: center;
+  color: var(--text-muted) !important;
+  font-size: 14px;
+}
+
 /* ---- Table Container ---- */
 .table-card {
   background: var(--bg-card);
