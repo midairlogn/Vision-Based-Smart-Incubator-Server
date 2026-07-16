@@ -258,8 +258,11 @@
       currentUUID = uuid;
       currentPlateID = plateid;
       currentData = data.colony;
-      updateSummary(data.colony);
-      renderGrid(data.colony);
+      currentData.sort(function(a, b) {
+        return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
+      });
+      updateSummary(currentData);
+      renderGrid(currentData);
     } catch (err) {
       showError('请求失败: ' + err.message);
     } finally {
