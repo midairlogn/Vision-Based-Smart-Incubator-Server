@@ -193,6 +193,7 @@
   var currentUUID = '';
   var currentPlateID = '0';
   var resizeObserver = null;
+  var boxCoordinateFrame = {width: 0, height: 0};
 
   async function doQuery(startMicro, endMicro) {
     var uuid = document.getElementById('uuid').value.trim();
@@ -356,6 +357,58 @@
     };
   }
 
+  function getBoxCoordinateFrame() {
+    var img = document.getElementById('modal-img');
+    return {
+      width: boxCoordinateFrame.width || img.naturalWidth || 1,
+      height: boxCoordinateFrame.height || img.naturalHeight || 1
+    };
+  }
+
+  function updateBoxCoordinateFrame(boxes) {
+    var img = document.getElementById('modal-img');
+    var naturalW = img.naturalWidth || 0;
+    var naturalH = img.naturalHeight || 0;
+    var frameW = naturalW;
+    var frameH = naturalH;
+    var maxX = 0;
+    var maxY = 0;
+
+    for (var i = 0; i < boxes.length; i++) {
+      maxX = Math.max(maxX, boxes[i].x1 || 0, boxes[i].x2 || 0);
+      maxY = Math.max(maxY, boxes[i].y1 || 0, boxes[i].y2 || 0);
+    }
+
+    // Detection records are often exported in the model input frame (commonly
+    // 640x640), while OSS stores the original higher-resolution image.
+    if (naturalW > 800 && naturalH > 800 && maxX > 0 && maxY > 0 && maxX <= 640 && maxY <= 640) {
+      frameW = 640;
+      frameH = 640;
+    }
+
+    boxCoordinateFrame = {width: frameW || 1, height: frameH || 1};
+  }
+
+  function boxToDisplayX(x, metrics) {
+    var frame = getBoxCoordinateFrame();
+    return metrics.offsetX + (x / frame.width) * metrics.displayW;
+  }
+
+  function boxToDisplayY(y, metrics) {
+    var frame = getBoxCoordinateFrame();
+    return metrics.offsetY + (y / frame.height) * metrics.displayH;
+  }
+
+  function displayToBoxX(x, metrics) {
+    var frame = getBoxCoordinateFrame();
+    return ((x - metrics.offsetX) / metrics.displayW) * frame.width;
+  }
+
+  function displayToBoxY(y, metrics) {
+    var frame = getBoxCoordinateFrame();
+    return ((y - metrics.offsetY) / metrics.displayH) * frame.height;
+  }
+
   function makeOriginalBox(box, originalIndex) {
     return {
       x1: box.x1,
@@ -369,10 +422,11 @@
   }
 
   function normalizeBox(box, source, originalIndex) {
-    var x1 = Math.max(0, Math.min(box.x1, box.x2));
-    var y1 = Math.max(0, Math.min(box.y1, box.y2));
-    var x2 = Math.min(document.getElementById('modal-img').naturalWidth, Math.max(box.x1, box.x2));
-    var y2 = Math.min(document.getElementById('modal-img').naturalHeight, Math.max(box.y1, box.y2));
+    var frame = getBoxCoordinateFrame();
+    var x1 = Math.min(frame.width, Math.max(0, Math.min(box.x1, box.x2)));
+    var y1 = Math.min(frame.height, Math.max(0, Math.min(box.y1, box.y2)));
+    var x2 = Math.min(frame.width, Math.max(box.x1, box.x2));
+    var y2 = Math.min(frame.height, Math.max(box.y1, box.y2));
     return {
       x1: x1,
       y1: y1,
@@ -382,6 +436,24 @@
       source: source,
       originalIndex: originalIndex
     };
+  }
+
+  function normalizeSavedUserBox(box) {
+    var img = document.getElementById('modal-img');
+    var frame = getBoxCoordinateFrame();
+    var maxX = Math.max(box.x1 || 0, box.x2 || 0);
+    var maxY = Math.max(box.y1 || 0, box.y2 || 0);
+    if (frame.width < img.naturalWidth && maxX > frame.width && maxX <= img.naturalWidth &&
+        frame.height < img.naturalHeight && maxY > frame.height && maxY <= img.naturalHeight) {
+      return {
+        x1: box.x1 / img.naturalWidth * frame.width,
+        y1: box.y1 / img.naturalHeight * frame.height,
+        x2: box.x2 / img.naturalWidth * frame.width,
+        y2: box.y2 / img.naturalHeight * frame.height,
+        conf: box.conf
+      };
+    }
+    return box;
   }
 
   function isOriginalDeleted(originalIndex) {
@@ -429,7 +501,7 @@
       }
       if (data && Array.isArray(data.added_boxes)) {
         for (var j = 0; j < data.added_boxes.length; j++) {
-          var b = normalizeBox(data.added_boxes[j], 'user', -1);
+          var b = normalizeBox(normalizeSavedUserBox(data.added_boxes[j]), 'user', -1);
           if (b.x2 - b.x1 >= 1 && b.y2 - b.y1 >= 1) {
             userAddedBoxes.push(b);
           }
@@ -482,10 +554,10 @@
 
     for (var i = 0; i < visibleBoxes.length; i++) {
       var b = visibleBoxes[i];
-      var left = metrics.offsetX + b.x1 * metrics.scaleX;
-      var top = metrics.offsetY + b.y1 * metrics.scaleY;
-      var width = (b.x2 - b.x1) * metrics.scaleX;
-      var height = (b.y2 - b.y1) * metrics.scaleY;
+      var left = boxToDisplayX(b.x1, metrics);
+      var top = boxToDisplayY(b.y1, metrics);
+      var width = boxToDisplayX(b.x2, metrics) - left;
+      var height = boxToDisplayY(b.y2, metrics) - top;
 
       var overlay = document.createElement('div');
       overlay.className = 'box-overlay';
@@ -594,6 +666,7 @@
     originalBoxes = [];
     userAddedBoxes = [];
     deletedOriginalIds = [];
+    boxCoordinateFrame = {width: 0, height: 0};
     document.getElementById('edit-mode-btn').classList.remove('active');
     document.getElementById('edit-hint').classList.add('hidden');
     document.getElementById('delete-box-btn').classList.add('hidden');
@@ -632,7 +705,7 @@
         fetch(item.record.url)
           .then(function(r) { return r.text(); })
           .then(function(text) {
-            originalBoxes = [];
+            var parsedBoxes = [];
             var raw = text.replace(/\r\n/g, '\n');
             var lines = raw.split('\n');
             for (var i = 0; i < lines.length; i++) {
@@ -646,7 +719,12 @@
               var y2 = parseFloat(parts[3]);
               var conf = parseFloat(parts[4]);
               if (isNaN(x1) || isNaN(y1) || isNaN(x2) || isNaN(y2) || isNaN(conf)) continue;
-              originalBoxes.push(normalizeBox({x1: x1, y1: y1, x2: x2, y2: y2, conf: conf}, 'auto', originalBoxes.length));
+              parsedBoxes.push({x1: x1, y1: y1, x2: x2, y2: y2, conf: conf});
+            }
+            updateBoxCoordinateFrame(parsedBoxes);
+            originalBoxes = [];
+            for (var j = 0; j < parsedBoxes.length; j++) {
+              originalBoxes.push(normalizeBox(parsedBoxes[j], 'auto', originalBoxes.length));
             }
             applyUserCorrections(item.user_boxes);
             renderBoxes();
@@ -657,6 +735,7 @@
             document.getElementById('box-tbody').innerHTML = '<tr><td colspan="6">无法加载识别数据</td></tr>';
           });
       } else {
+        updateBoxCoordinateFrame([]);
         applyUserCorrections(item.user_boxes);
         renderBoxes();
         updateBoxTable();
@@ -838,10 +917,10 @@
 
     if (width < 5 || height < 5) return;
 
-    var x1 = (left - metrics.offsetX) / metrics.scaleX;
-    var y1 = (top - metrics.offsetY) / metrics.scaleY;
-    var x2 = (left + width - metrics.offsetX) / metrics.scaleX;
-    var y2 = (top + height - metrics.offsetY) / metrics.scaleY;
+    var x1 = displayToBoxX(left, metrics);
+    var y1 = displayToBoxY(top, metrics);
+    var x2 = displayToBoxX(left + width, metrics);
+    var y2 = displayToBoxY(top + height, metrics);
 
     userAddedBoxes.push(normalizeBox({x1: x1, y1: y1, x2: x2, y2: y2, conf: -1}, 'user', -1));
     selectedBoxIndex = getVisibleBoxes().length - 1;
