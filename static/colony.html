@@ -41,7 +41,7 @@
       </div>
       <div class="field">
         <label for="plateid">盘位号</label>
-        <input type="number" id="plateid" value="1" min="1" step="1" required inputmode="numeric" oninput="validatePlateIDInput()">
+        <input type="number" id="plateid" value="0" min="0" step="1" required inputmode="numeric" oninput="validatePlateIDInput()">
       </div>
     </div>
 
@@ -183,7 +183,7 @@
   var drawStart = null;
   var drawOverlay = null;
   var currentModalIndex = -1;
-  var currentPlateID = '1';
+  var currentPlateID = '0';
 
   async function doQuery(startMicro, endMicro) {
     var uuid = document.getElementById('uuid').value.trim();
@@ -231,7 +231,7 @@
     var input = document.getElementById('plateid');
     var value = input.value.trim();
     if (!validatePlateIDInput()) {
-      showError('盘位号必须是大于 0 的整数');
+      showError('盘位号必须是非负整数');
       input.focus();
       return null;
     }
@@ -241,8 +241,8 @@
   function validatePlateIDInput() {
     var input = document.getElementById('plateid');
     var value = input.value.trim();
-    var valid = /^[1-9]\d*$/.test(value);
-    input.setCustomValidity(valid ? '' : '盘位号必须是大于 0 的整数');
+    var valid = /^\d+$/.test(value);
+    input.setCustomValidity(valid ? '' : '盘位号必须是非负整数');
     return valid;
   }
 

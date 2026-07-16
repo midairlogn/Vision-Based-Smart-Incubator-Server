@@ -127,7 +127,7 @@ func handleColonyQuery(w http.ResponseWriter, r *http.Request) {
 	}
 
 	plateid, err := strconv.Atoi(plateidStr)
-	if err != nil || plateid < 1 {
+	if err != nil || plateid < 0 {
 		http.Error(w, `{"success":false,"message":"invalid plateid param"}`, http.StatusBadRequest)
 		return
 	}
@@ -181,7 +181,7 @@ func handleColonyAnalyze(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.UUID == "" || req.PlateID < 1 || req.Timestamp == "" {
+	if req.UUID == "" || req.PlateID < 0 || req.Timestamp == "" {
 		http.Error(w, `{"success":false,"message":"missing required params: uuid, plateid, timestamp"}`, http.StatusBadRequest)
 		return
 	}
