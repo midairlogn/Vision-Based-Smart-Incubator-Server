@@ -778,8 +778,8 @@ select.form-input,
 .modal-content {
   background: var(--bg-card);
   border-radius: var(--radius-xl);
-  max-width: 90vw;
-  max-height: 90vh;
+  width: calc(100vw - 48px);
+  height: calc(100vh - 48px);
   overflow-y: auto;
   position: relative;
   padding: 28px;
@@ -859,22 +859,27 @@ select.form-input,
 
 .img-container {
   position: relative;
-  display: inline-block;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: min(72vh, 720px);
   max-width: 100%;
   border-radius: var(--radius);
   overflow: hidden;
+  background: var(--border-light);
 }
 
 .img-container.image-loading {
-  width: min(720px, 80vw);
   min-height: 320px;
-  background: var(--border-light);
 }
 
 .img-container img {
   display: block;
+  width: auto;
+  height: auto;
   max-width: 100%;
-  max-height: 65vh;
+  max-height: 100%;
   border-radius: var(--radius);
   user-select: none;
 }
@@ -1417,6 +1422,10 @@ select.form-input,
 
 /* ---- Responsive ---- */
 @media (max-width: 640px) {
+  .modal-overlay {
+    padding: 8px;
+  }
+
   .page {
     padding: 20px 16px 48px;
   }
@@ -1489,8 +1498,52 @@ select.form-input,
     height: 140px;
   }
 
+  .card-thumb-wrap {
+    height: 140px;
+  }
+
+  .card-thumb-wrap .card-thumb {
+    height: 100%;
+    object-position: center center;
+  }
+
   .modal-content {
-    padding: 20px;
+    width: calc(100vw - 16px);
+    height: calc(100vh - 16px);
+    height: calc(100dvh - 16px);
+    padding: 16px;
+  }
+
+  .modal-header {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+
+  .modal-header h2 {
+    max-width: calc(100% - 52px);
+  }
+
+  .modal-header .modal-info {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .img-container {
+    height: auto;
+    min-height: 0;
+  }
+
+  .img-container.image-loading {
+    min-height: 300px;
+  }
+
+  .img-container img {
+    width: 100%;
+    height: auto;
+    max-height: calc(100vh - 260px);
+    max-height: calc(100dvh - 260px);
   }
 
   .modal-footer {
