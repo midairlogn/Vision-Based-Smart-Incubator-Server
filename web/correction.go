@@ -79,8 +79,17 @@ func SaveColonyCorrection(uuid string, plateid int, timestamp string, userBoxes 
 
 	putReq := tablestore.NewPutTimeseriesDataRequest(tableName)
 	putReq.AddTimeseriesRows(writeRow)
-	if _, err := client.PutTimeseriesData(putReq); err != nil {
+	putResp, err := client.PutTimeseriesData(putReq)
+	if err != nil {
 		return CorrectionResponse{Success: false, Message: fmt.Sprintf("Failed to write user correction: %v", err)}
+	}
+	if putResp == nil {
+		return CorrectionResponse{Success: false, Message: "Failed to write user correction: empty response"}
+	}
+	failedRows := putResp.GetFailedRowResults()
+	if len(failedRows) > 0 {
+		failed := failedRows[0]
+		return CorrectionResponse{Success: false, Message: fmt.Sprintf("Failed to write user correction row %d: %v", failed.Index, failed.Error)}
 	}
 
 	return CorrectionResponse{Success: true}

@@ -189,6 +189,7 @@
   var drawStart = null;
   var drawOverlay = null;
   var currentModalIndex = -1;
+  var currentUUID = '';
   var currentPlateID = '0';
   var resizeObserver = null;
 
@@ -197,7 +198,6 @@
     var plateid = getValidPlateID();
     if (!uuid) { showError('请输入设备 UUID'); return; }
     if (!plateid) { return; }
-    currentPlateID = plateid;
     hideError();
     hideInfo();
 
@@ -223,6 +223,8 @@
         return;
       }
 
+      currentUUID = uuid;
+      currentPlateID = plateid;
       currentData = data.colony;
       updateSummary(data.colony);
       renderGrid(data.colony);
@@ -911,7 +913,7 @@
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({
-          uuid: document.getElementById('uuid').value.trim(),
+          uuid: currentUUID,
           plateid: parseInt(currentPlateID, 10),
           timestamp: formatStoredTimestamp(item.timestamp),
           user_boxes: correction
