@@ -96,7 +96,7 @@
         <div class="summary-value" id="sum-total-colonies">--</div>
       </div>
       <div class="summary-card">
-        <div class="summary-label">最新采集</div>
+        <div class="summary-label">最新采集时间</div>
         <div class="summary-value" id="sum-latest-time">--</div>
       </div>
     </div>
@@ -178,6 +178,7 @@
   </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <script src="common.js"></script>
 <script>
   var currentData = [];
@@ -676,7 +677,7 @@
     // AI panel
     var aiBody = document.getElementById('ai-panel-body');
     if (item.reply) {
-      aiBody.innerHTML = '<div class="ai-reply">' + escapeHtml(item.reply) + '</div>';
+      aiBody.innerHTML = '<div class="ai-reply markdown-body">' + renderMarkdown(item.reply) + '</div>';
       document.getElementById('ai-analyze-btn').style.display = 'none';
     } else {
       aiBody.innerHTML = '<span class="ai-placeholder">暂无 AI 分析结果。点击"运行 AI 分析"生成。</span>';
@@ -1035,7 +1036,7 @@
       });
       var data = await resp.json();
       if (data.success && data.reply) {
-        body.innerHTML = '<div class="ai-reply">' + escapeHtml(data.reply) + '</div>';
+        body.innerHTML = '<div class="ai-reply markdown-body">' + renderMarkdown(data.reply) + '</div>';
         item.reply = data.reply;
         btn.style.display = 'none';
       } else {
@@ -1053,6 +1054,13 @@
     var div = document.createElement('div');
     div.appendChild(document.createTextNode(text));
     return div.innerHTML.replace(/\n/g, '<br>');
+  }
+
+  function renderMarkdown(text) {
+    if (!text) return '';
+    var s = text.replace(/\\r\\n/g, '\n').replace(/\\n/g, '\n').replace(/\r\n/g, '\n');
+    s = s.replace(/[ \t]*\n[ \t]*\n[ \t]*(?:\n[ \t]*)+/g, '\n\n');
+    return marked.parse(s.trim());
   }
 
   function formatStoredTimestamp(timestamp) {
