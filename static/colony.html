@@ -37,13 +37,18 @@
     <div class="form-row">
       <div class="field">
         <label for="uuid">设备 UUID</label>
-        <input type="text" id="uuid" placeholder="请输入设备 UUID">
+        <select id="uuid" disabled>
+          <option value="">正在加载设备...</option>
+        </select>
       </div>
       <div class="field">
         <label for="plateid">盘位号</label>
-        <input type="number" id="plateid" value="0" min="0" step="1" required inputmode="numeric" oninput="validatePlateIDInput()">
+        <select id="plateid" disabled>
+          <option value="">请先选择设备</option>
+        </select>
       </div>
     </div>
+    <div class="selector-status" id="device-status">从阿里云 Tablestore 获取设备和盘位列表。</div>
 
     <div class="query-row">
       <div class="custom-time">

@@ -228,6 +228,16 @@ body {
   outline: none;
 }
 
+select.form-input,
+.form-row .field select {
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--text-muted) 50%), linear-gradient(135deg, var(--text-muted) 50%, transparent 50%);
+  background-position: calc(100% - 18px) 50%, calc(100% - 13px) 50%;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  padding-right: 38px;
+}
+
 .form-input:hover {
   border-color: #cbd5e1;
 }
@@ -262,7 +272,8 @@ body {
   letter-spacing: 0.04em;
 }
 
-.form-row .field input {
+.form-row .field input,
+.form-row .field select {
   width: 100%;
   padding: 10px 14px;
   border: 1px solid var(--border);
@@ -275,13 +286,34 @@ body {
   outline: none;
 }
 
-.form-row .field input:hover {
+.form-row .field input:hover,
+.form-row .field select:hover {
   border-color: #cbd5e1;
 }
 
-.form-row .field input:focus {
+.form-row .field input:focus,
+.form-row .field select:focus {
   border-color: var(--primary);
   box-shadow: 0 0 0 3px var(--primary-50);
+}
+
+.form-input:disabled,
+.form-row .field input:disabled,
+.form-row .field select:disabled {
+  color: var(--text-muted);
+  background-color: var(--border-light);
+  cursor: not-allowed;
+}
+
+.selector-status {
+  margin-top: 8px;
+  margin-bottom: 16px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.selector-status.error {
+  color: var(--error);
 }
 
 /* ---- Query Row (quick buttons + time fields) ---- */

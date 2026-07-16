@@ -35,6 +35,7 @@ func main() {
 	fs := http.FileServer(http.Dir("static"))
 
 	mux := http.NewServeMux()
+	mux.HandleFunc("/api/devices", handleDevicesQuery)
 	mux.HandleFunc("/api/env", handleEnvQuery)
 	mux.HandleFunc("/api/colony", handleColonyQuery)
 	mux.HandleFunc("/api/colony/analyze", handleColonyAnalyze)
@@ -61,6 +62,20 @@ func main() {
 	if err := server.ListenAndServe(); err != nil {
 		log.Fatalf("Web server failed: %v", err)
 	}
+}
+
+func handleDevicesQuery(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, `{"success":false,"message":"method not allowed"}`, http.StatusMethodNotAllowed)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	result := web.GetDevices()
+	if !result.Success {
+		w.WriteHeader(http.StatusInternalServerError)
+	}
+	json.NewEncoder(w).Encode(result)
 }
 
 func handleEnvQuery(w http.ResponseWriter, r *http.Request) {
