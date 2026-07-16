@@ -1189,6 +1189,12 @@ select.form-input,
   pointer-events: none;
 }
 
+.box-overlay.deleted-box {
+  border-style: dashed;
+  border-color: var(--text-muted);
+  background: rgba(100, 116, 139, 0.08);
+}
+
 .selected-row {
   background: var(--primary-50) !important;
 }

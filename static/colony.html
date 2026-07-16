@@ -155,7 +155,7 @@
       </div>
       <div class="edit-hint hidden" id="edit-hint">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
-        在图片内拖动以绘制新的用户框。点击框以选中，然后按 Delete 键。删除自动框仅在用户修正中标记为隐藏；点击“显示已删除”可一次恢复所有隐藏的原始框。支持 Ctrl+Z 撤销、Ctrl+Y 或 Ctrl+Shift+Z 重做。
+        在图片内拖动以绘制新的用户框。点击框以选中，然后按 Delete 键。删除自动框仅在用户修正中标记为隐藏；点击“显示已删除”可临时显示/隐藏这些框。支持 Ctrl+Z 撤销、Ctrl+Y 或 Ctrl+Shift+Z 重做。
       </div>
       <div class="img-container" id="img-container">
         <div class="modal-img-loader" id="modal-img-loader">
@@ -219,6 +219,7 @@
   var MANUAL_BOX_CONFIDENCE = -1;
   var undoStack = [];
   var redoStack = [];
+  var showDeletedOriginals = false;
 
   async function doQuery(startMicro, endMicro) {
     var uuid = document.getElementById('uuid').value.trim();
@@ -504,6 +505,25 @@
     return visible;
   }
 
+  function makeDeletedOriginalBox(box, originalIndex) {
+    var b = makeOriginalBox(box, originalIndex);
+    b.source = 'deleted';
+    return b;
+  }
+
+  function getDisplayBoxes() {
+    var display = getVisibleBoxes();
+    if (showDeletedOriginals) {
+      for (var i = 0; i < deletedOriginalIds.length; i++) {
+        var originalIndex = deletedOriginalIds[i];
+        if (originalBoxes[originalIndex]) {
+          display.push(makeDeletedOriginalBox(originalBoxes[originalIndex], originalIndex));
+        }
+      }
+    }
+    return display;
+  }
+
   function serializeUserCorrections() {
     return {
       version: 1,
@@ -569,9 +589,12 @@
     if (undoBtn) undoBtn.disabled = undoStack.length === 0;
     if (redoBtn) redoBtn.disabled = redoStack.length === 0;
     if (showDeletedBtn) {
+      if (deletedOriginalIds.length === 0) showDeletedOriginals = false;
       showDeletedBtn.disabled = deletedOriginalIds.length === 0;
       var label = document.getElementById('show-deleted-label');
-      if (label) label.textContent = deletedOriginalIds.length > 0 ? '显示已删除(' + deletedOriginalIds.length + ')' : '显示已删除';
+      if (label) {
+        label.textContent = showDeletedOriginals ? '隐藏已删除(' + deletedOriginalIds.length + ')' : (deletedOriginalIds.length > 0 ? '显示已删除(' + deletedOriginalIds.length + ')' : '显示已删除');
+      }
     }
   }
 
@@ -637,7 +660,7 @@
     clearOverlays();
     var container = document.getElementById('img-container');
     var metrics = getImageMetrics();
-    var visibleBoxes = getVisibleBoxes();
+    var visibleBoxes = getDisplayBoxes();
 
     var tooltip = document.createElement('div');
     tooltip.className = 'box-tooltip';
@@ -654,6 +677,7 @@
       var overlay = document.createElement('div');
       overlay.className = 'box-overlay';
       if (b.source === 'user') overlay.classList.add('user-box');
+      if (b.source === 'deleted') overlay.classList.add('deleted-box');
       if (b.conf >= 0.6) overlay.classList.add('high');
       if (i === selectedBoxIndex) overlay.classList.add('selected');
       overlay.style.left = left + 'px';
@@ -675,7 +699,7 @@
 
       overlay.addEventListener('mouseenter', (function(bx1, by1, bx2, by2, bconf, source) {
         return function(e) {
-          var label = source === 'user' ? '手动' : (bconf * 100).toFixed(1) + '%';
+          var label = source === 'user' ? '手动' : (source === 'deleted' ? '已删除' : (bconf * 100).toFixed(1) + '%');
           tooltip.textContent = 'x1:' + bx1.toFixed(0) + ' y1:' + by1.toFixed(0) + ' x2:' + bx2.toFixed(0) + ' y2:' + by2.toFixed(0) + ' ' + label;
           tooltip.style.display = 'block';
           positionTooltip(e, tooltip);
@@ -699,17 +723,19 @@
     var tbody = document.getElementById('box-tbody');
     tbody.innerHTML = '';
     var visibleBoxes = getVisibleBoxes();
+    var displayBoxes = getDisplayBoxes();
     if (visibleBoxes.length === 0 && originalBoxes.length === 0) {
       tbody.innerHTML = '<tr><td colspan="6">暂无识别框</td></tr>';
       document.getElementById('modal-count').textContent = '菌落数: 0';
       updateEditButtons();
       return;
     }
-    for (var i = 0; i < visibleBoxes.length; i++) {
-      var b = visibleBoxes[i];
+    for (var i = 0; i < displayBoxes.length; i++) {
+      var b = displayBoxes[i];
       var row = document.createElement('tr');
       if (i === selectedBoxIndex) row.classList.add('selected-row');
-      row.innerHTML = '<td>' + b.x1.toFixed(1) + '</td><td>' + b.y1.toFixed(1) + '</td><td>' + b.x2.toFixed(1) + '</td><td>' + b.y2.toFixed(1) + '</td><td>' + (b.conf >= 0 ? (b.conf * 100).toFixed(1) + '%' : '手动') + '</td><td>' + (b.source === 'user' ? '手动' : '自动') + '</td>';
+      if (b.source === 'deleted') row.classList.add('deleted-row');
+      row.innerHTML = '<td>' + b.x1.toFixed(1) + '</td><td>' + b.y1.toFixed(1) + '</td><td>' + b.x2.toFixed(1) + '</td><td>' + b.y2.toFixed(1) + '</td><td>' + (b.conf >= 0 ? (b.conf * 100).toFixed(1) + '%' : '手动') + '</td><td>' + (b.source === 'user' ? '手动' : (b.source === 'deleted' ? '已删除' : '自动')) + '</td>';
       row.addEventListener('click', (function(idx) {
         return function() {
           selectedBoxIndex = (selectedBoxIndex === idx) ? -1 : idx;
@@ -722,7 +748,7 @@
     if (deletedOriginalIds.length > 0) {
       var deletedRow = document.createElement('tr');
       deletedRow.className = 'deleted-row';
-      deletedRow.innerHTML = '<td colspan="6">已隐藏原始识别框: ' + deletedOriginalIds.length + ' 个。点击上方“显示已删除”可一次恢复。</td>';
+      deletedRow.innerHTML = '<td colspan="6">已隐藏原始识别框: ' + deletedOriginalIds.length + ' 个。点击上方按钮可临时' + (showDeletedOriginals ? '隐藏' : '显示') + '。</td>';
       tbody.appendChild(deletedRow);
     }
     document.getElementById('modal-count').textContent = '菌落数: ' + visibleBoxes.length;
@@ -731,8 +757,7 @@
 
   function showDeletedOriginalBoxes() {
     if (deletedOriginalIds.length === 0) return;
-    recordEditState();
-    deletedOriginalIds = [];
+    showDeletedOriginals = !showDeletedOriginals;
     selectedBoxIndex = -1;
     renderBoxes();
     updateBoxTable();
@@ -769,6 +794,7 @@
     originalBoxes = [];
     userAddedBoxes = [];
     deletedOriginalIds = [];
+    showDeletedOriginals = false;
     boxCoordinateFrame = {width: 0, height: 0};
     document.getElementById('edit-mode-btn').classList.remove('active');
     document.getElementById('edit-hint').classList.add('hidden');
@@ -1051,7 +1077,7 @@
 
     recordEditState();
     userAddedBoxes.push(normalizeBox({x1: x1, y1: y1, x2: x2, y2: y2, conf: MANUAL_BOX_CONFIDENCE}, 'user', -1));
-    selectedBoxIndex = getVisibleBoxes().length - 1;
+    selectedBoxIndex = getDisplayBoxes().length - 1;
     renderBoxes();
     updateBoxTable();
   }
@@ -1087,9 +1113,10 @@
   }
 
   function deleteSelectedBox() {
-    var visibleBoxes = getVisibleBoxes();
-    if (selectedBoxIndex < 0 || selectedBoxIndex >= visibleBoxes.length) return;
-    var selected = visibleBoxes[selectedBoxIndex];
+    var displayBoxes = getDisplayBoxes();
+    if (selectedBoxIndex < 0 || selectedBoxIndex >= displayBoxes.length) return;
+    var selected = displayBoxes[selectedBoxIndex];
+    if (selected.source === 'deleted') return;
     recordEditState();
     if (selected.source === 'user') {
       userAddedBoxes.splice(selected.userIndex, 1);
