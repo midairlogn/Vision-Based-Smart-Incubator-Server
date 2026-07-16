@@ -101,6 +101,22 @@ function setDeviceStatusWithManualAction(message, isError) {
   el.appendChild(button);
 }
 
+function setDeviceStatusWithSelectAction(message, isError) {
+  setDeviceStatus(message + ' ', isError);
+  var el = document.getElementById('device-status');
+  var uuidEl = document.getElementById('uuid');
+  if (!el || !uuidEl || uuidEl.tagName !== 'INPUT') return;
+
+  var button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'selector-manual-btn';
+  button.textContent = '使用列表';
+  button.addEventListener('click', function() {
+    enableDeviceSelectMode();
+  });
+  el.appendChild(button);
+}
+
 function resetSelect(select, message) {
   select.innerHTML = '';
   var option = document.createElement('option');
@@ -112,6 +128,32 @@ function resetSelect(select, message) {
 function replaceElement(oldEl, newEl) {
   oldEl.parentNode.replaceChild(newEl, oldEl);
   return newEl;
+}
+
+function enableDeviceSelectMode() {
+  var uuidInput = document.getElementById('uuid');
+  if (!uuidInput || uuidInput.tagName !== 'INPUT') return;
+
+  localStorage.setItem('incubator_uuid', uuidInput.value.trim());
+
+  var uuidSelect = document.createElement('select');
+  uuidSelect.id = 'uuid';
+  uuidSelect.className = uuidInput.className;
+  uuidSelect.disabled = true;
+  resetSelect(uuidSelect, '正在加载设备...');
+  replaceElement(uuidInput, uuidSelect);
+
+  var plateInput = document.getElementById('plateid');
+  if (plateInput && plateInput.tagName === 'INPUT') {
+    localStorage.setItem('incubator_plateid', plateInput.value.trim());
+    var plateSelect = document.createElement('select');
+    plateSelect.id = 'plateid';
+    plateSelect.disabled = true;
+    resetSelect(plateSelect, '请先选择设备');
+    replaceElement(plateInput, plateSelect);
+  }
+
+  initDeviceSelectors();
 }
 
 function enableManualDeviceFallback(message) {
@@ -146,7 +188,7 @@ function enableManualDeviceFallback(message) {
     });
   }
 
-  setDeviceStatus(message + ' 已切换为手动输入。', true);
+  setDeviceStatusWithSelectAction(message + ' 已切换为手动输入。', true);
 }
 
 async function readJSONResponse(resp) {
