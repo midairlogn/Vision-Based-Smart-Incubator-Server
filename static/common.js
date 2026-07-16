@@ -53,7 +53,9 @@ function queryCustom() {
 
 function showError(msg) {
   var el = document.getElementById('error-message');
-  el.textContent = msg;
+  var span = el.querySelector('span');
+  if (span) span.textContent = msg;
+  else el.textContent = msg;
   el.style.display = 'flex';
 }
 
@@ -64,7 +66,9 @@ function hideError() {
 function showInfo(msg) {
   var el = document.getElementById('info-message');
   if (!el) return;
-  el.textContent = msg;
+  var span = el.querySelector('span');
+  if (span) span.textContent = msg;
+  else el.textContent = msg;
   el.style.display = 'flex';
 }
 
