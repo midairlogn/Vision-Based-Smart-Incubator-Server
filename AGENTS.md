@@ -14,7 +14,7 @@ go build -o bin/web ./cmd/web/
 # Run MQTT listener (requires env vars)
 ./bin/listener
 
-# Run web server on :8080 (requires env vars)
+# Run web server on :8182 (requires env vars)
 ./bin/web
 ```
 
@@ -24,7 +24,7 @@ There is no Makefile, no test suite, no linting, no CI, and no Dockerfile. `go v
 
 All config via env vars. Copy `.env.example` to `.env` and fill in credentials. The app uses `godotenv` to load `.env` automatically at startup.
 
-Critical vars: `OSS_ACCESS_KEY_ID`, `OSS_ACCESS_KEY_SECRET`, `REGION`, `BUCKET_NAME`, `TABLESTORE_ACCESS_KEY_ID`, `TABLESTORE_ACCESS_KEY_SECRET`, `TABLE_INSTANCE_NAME`, `TABLE_ENDPOINT`, `ENV_TABLE_NAME`, `ENV_MEASURE_NAME`, `COLONY_TABLE_NAME`, `COLONY_MEASURE_NAME`, `USERNAME`, `PASSWORD`, `PORT` (MQTT broker address), `DASHSCOPE_API_KEY`, `MODEL_NAME`.
+Critical vars: `OSS_ACCESS_KEY_ID`, `OSS_ACCESS_KEY_SECRET`, `REGION`, `BUCKET_NAME`, `TABLESTORE_ACCESS_KEY_ID`, `TABLESTORE_ACCESS_KEY_SECRET`, `TABLE_INSTANCE_NAME`, `TABLE_ENDPOINT`, `ENV_TABLE_NAME`, `ENV_MEASURE_NAME`, `COLONY_TABLE_NAME`, `COLONY_MEASURE_NAME`, `USERNAME`, `PASSWORD`, `PORT` (MQTT broker address), `WEB_PORT` (web listen port, default `8182`), `DASHSCOPE_API_KEY`, `MODEL_NAME`.
 
 Email alert vars: `SMTP_HOST`, `SMTP_PORT`, `SRC_EMAIL`, `DEST_EMAIL`, `AUTHCODE`. SMTP host/port default to `smtp.qq.com:465` when omitted.
 
@@ -36,7 +36,7 @@ Two separate `main` packages — not a single entrypoint:
 
 - `cmd/server/listener.go` — MQTT subscriber. Connects to broker via `PORT` env var. Subscribes to `device/#`. Dispatches to `utils.OnDataReceived` (env data → Tablestore), `utils.OnUploadRequest` (upload → OSS presign + MQTT reply + colony record), `device/{uuid}/warn` → `utils.SendAlert` (email), and handles `device/{uuid}/time` (server time reply).
 
-- `cmd/web/web.go` — HTTP server on `:8080`. Serves static files from `static/` and exposes `/api/env` and `/api/colony` JSON endpoints.
+- `cmd/web/web.go` — HTTP server on `:8182` by default (`WEB_PORT` overrides). Serves static files from `static/` and exposes `/api/env` and `/api/colony` JSON endpoints.
 
 - `utils/` — Business logic: OSS presigning, Tablestore read/write, Bailian (Alibaba Cloud AI) inference.
 

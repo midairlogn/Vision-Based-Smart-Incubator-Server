@@ -6,6 +6,7 @@ import (
 	"log"
 	"log/slog"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -50,9 +51,14 @@ func main() {
 
 	handler := recoverMiddleware(mux)
 
-	log.Println("web server starting on :8080")
+	// Determine web server port from environment, default to 8182
+	webPort := os.Getenv("WEB_PORT")
+	if webPort == "" {
+		webPort = "8182"
+	}
+	log.Printf("web server starting on :%s", webPort)
 	server := &http.Server{
-		Addr:              ":8080",
+		Addr:              ":" + webPort,
 		Handler:           handler,
 		ReadTimeout:       30 * time.Second,
 		WriteTimeout:      120 * time.Second,

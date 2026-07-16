@@ -42,7 +42,7 @@ echo "Starting MQTT listener..."
 "$LISTENER_BIN" > >(tee -a "$LOG_DIR/listener.log") 2>&1 &
 LISTENER_PID=$!
 
-echo "Starting web server on :8080..."
+echo "Starting web server on :${WEB_PORT:-8182}..."
 "$WEB_BIN" > >(tee -a "$LOG_DIR/web.log") 2>&1 &
 WEB_PID=$!
 

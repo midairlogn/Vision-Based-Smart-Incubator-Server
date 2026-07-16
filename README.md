@@ -10,7 +10,7 @@
                     │                                              │
   MCU               │   ┌─────────────────┐      ┌──────────────┐  │
   设备  ──MQTT──▶  │   │  listener.go    │      │  web.go      │   │
-  (发布)            │   │  (MQTT 订阅者)   │      │  (:8080)     │  │
+  (发布)            │   │  (MQTT 订阅者)   │      │  (:8182)     │  │
                     │   └────────┬────────┘      └──────┬───────┘  │
                     │            │                      │          │
                     │            ▼                      ▼          │
@@ -77,13 +77,13 @@ chmod +x start.sh
 ./bin/listener
 ```
 
-终端 2 — Web 服务器（`:8080`）：
+终端 2 — Web 服务器（`:8182`）：
 
 ```bash
 ./bin/web
 ```
 
-浏览器访问 `http://localhost:8080` 查看仪表板。
+浏览器访问 `http://localhost:8182` 查看仪表板。
 
 ## 环境变量
 
@@ -118,6 +118,12 @@ chmod +x start.sh
 | `USERNAME` | Broker 用户名 |
 | `PASSWORD` | Broker 密码 |
 | `PORT` | Broker 连接地址，如 `tcp://localhost:1883` |
+
+### Web 服务器
+
+| 变量 | 说明 |
+|---|---|
+| `WEB_PORT` | HTTP 监听端口，默认 `8182` |
 
 ### 邮件告警（可选）
 
