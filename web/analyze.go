@@ -3,7 +3,6 @@ package web
 import (
 	"bufio"
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -12,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aliyun/alibabacloud-oss-go-sdk-v2/oss"
 	"github.com/aliyun/aliyun-tablestore-go-sdk/tablestore"
 )
 
@@ -20,21 +18,6 @@ type AnalyzeResponse struct {
 	Success bool   `json:"success"`
 	Message string `json:"message,omitempty"`
 	Reply   string `json:"reply,omitempty"`
-}
-
-func signDownloadURL(objectName string, expireTime time.Duration) (string, error) {
-	bucketName := os.Getenv("BUCKET_NAME")
-
-	result, err := getOSSClient().Presign(context.TODO(), &oss.GetObjectRequest{
-		Bucket: oss.Ptr(bucketName),
-		Key:    oss.Ptr(objectName),
-	},
-		oss.PresignExpires(expireTime),
-	)
-	if err != nil {
-		return "", err
-	}
-	return result.URL, nil
 }
 
 func callBailian(imgURL string, modelName string) (string, error) {
@@ -209,16 +192,16 @@ func AnalyzeColony(uuid string, plateid int, timestamp string) AnalyzeResponse {
 		return AnalyzeResponse{Success: false, Message: "No matching colony record found"}
 	}
 
-	imgPath := uuid + "/" +
-		strconv.Itoa(plateid) + "/" +
-		timestamp + ".bmp"
-
-	imgURL, err := signDownloadURL(imgPath, 10*time.Minute)
-	if err != nil {
-		return AnalyzeResponse{Success: false, Message: "Failed to sign image URL: " + err.Error()}
+	imgPath, ok := safeString(existingFields, "image")
+	if !ok || imgPath == "" {
+		return AnalyzeResponse{Success: false, Message: "Matching colony record has no image path"}
+	}
+	image := getFileMetaData(imgPath, 10*time.Minute)
+	if !image.Success {
+		return AnalyzeResponse{Success: false, Message: "Image is unavailable: " + image.Message}
 	}
 
-	reply, err := callBailian(imgURL, modelName)
+	reply, err := callBailian(image.URL, modelName)
 	if err != nil {
 		return AnalyzeResponse{Success: false, Message: "AI inference failed: " + err.Error()}
 	}

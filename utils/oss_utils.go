@@ -9,7 +9,9 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/aliyun/alibabacloud-oss-go-sdk-v2/oss"
@@ -88,6 +90,18 @@ func signDownloadURL(object_name string, expire_time time.Duration) (string, err
 	return result.URL, nil
 }
 
+func colonyObjectPaths(uuid string, plateID int, timestamp time.Time, sourceImagePath string) (string, string, error) {
+	extension := strings.ToLower(path.Ext(strings.TrimSpace(sourceImagePath)))
+	switch extension {
+	case ".bmp", ".jpg", ".jpeg":
+	default:
+		return "", "", fmt.Errorf("unsupported image extension %q; supported extensions are .bmp, .jpg, and .jpeg", extension)
+	}
+
+	stem := uuid + "/" + strconv.Itoa(plateID) + "/" + timestamp.Format("20060102-150405")
+	return stem + extension, stem + ".txt", nil
+}
+
 // uploadMessage MQTT发送URL信息
 func uploadMessage(client MQTT.Client,
 	uuid string,
@@ -144,12 +158,12 @@ func OnUploadRequest(client MQTT.Client, uuid string, payload string) {
 		timestamp = time.Now().In(loc)
 	}
 
-	img_path := uuid + "/" +
-		strconv.Itoa(json_result.PlateID) + "/" +
-		timestamp.Format("20060102-150405") + ".bmp"
-	txt_path := uuid + "/" +
-		strconv.Itoa(json_result.PlateID) + "/" +
-		timestamp.Format("20060102-150405") + ".txt"
+	img_path, txt_path, err := colonyObjectPaths(uuid, json_result.PlateID, timestamp, json_result.ImgPath)
+	if err != nil {
+		slog.Error(fmt.Sprintf("Invalid image path %q: %v", json_result.ImgPath, err))
+		uploadMessage(client, uuid, timestamp, false, json_result.ImgPath, "")
+		return
+	}
 
 	// Generate both presign URLs before publishing either
 	img_url, err := signUploadURL(img_path, 10*time.Minute)

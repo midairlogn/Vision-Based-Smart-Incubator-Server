@@ -254,6 +254,8 @@ GET /api/colony?uuid=<设备UUID>&plateid=<盘位号>&start=<起始微秒>&end=<
 {"timestamp": "20060102-150405", "plateid": 1, "imgpath": "/local/photo.jpg", "txtpath": "/local/result.txt", "number": 15}
 ```
 
+图片支持 `.bmp`、`.jpg` 和 `.jpeg` 扩展名（不区分大小写）。服务端使用设备、盘位和时间戳生成相同的 OSS 文件名前缀，保留图片类型并将识别记录存为同名前缀的 `.txt` 文件；只有两个对象都上传成功后才写入 Tablestore。
+
 服务端生成 OSS 预签名 PutObject URL，通过以下主题回复：
 
 主题：`server/{uuid}/upload`

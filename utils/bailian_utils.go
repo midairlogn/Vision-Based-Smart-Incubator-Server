@@ -8,11 +8,8 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
-	"strconv"
 	"strings"
 	"time"
-
-	"github.com/aliyun/aliyun-tablestore-go-sdk/tablestore"
 )
 
 type ImageURL struct {
@@ -143,65 +140,4 @@ func BailianInference(img_path string, model_name string) (string, string) {
 	}
 
 	return reasoning_content, content
-}
-
-func UploadSucess(uuid string, timestamp time.Time, plateid int) {
-	img_path := uuid + "/" +
-		strconv.Itoa(plateid) + "/" +
-		timestamp.Format("20060102-150405") + ".bmp"
-
-	model_name := os.Getenv("MODEL_NAME")
-	_, content := BailianInference(img_path, model_name)
-
-	client := InitClient()
-	table_name := os.Getenv("COLONY_TABLE_NAME")
-	measurement_name := os.Getenv("COLONY_MEASURE_NAME")
-
-	timeseriesKey := tablestore.NewTimeseriesKey()
-	timeseriesKey.SetMeasurementName(measurement_name)
-	timeseriesKey.SetDataSource(uuid)
-	timeseriesKey.AddTag("plate_id", strconv.Itoa(plateid))
-
-	// Use truncated timestamp to match write path
-	truncatedUs := timestamp.UnixMicro() / 1e6 * 1e6
-	getTimeseriesDataRequest := tablestore.NewGetTimeseriesDataRequest(table_name)
-	getTimeseriesDataRequest.SetTimeseriesKey(timeseriesKey)
-	getTimeseriesDataRequest.SetTimeRange(truncatedUs, truncatedUs+1)
-	getTimeseriesDataRequest.SetLimit(-1)
-
-	getTimeseriesResp, err := client.GetTimeseriesData(getTimeseriesDataRequest)
-	if err != nil {
-		slog.Error(fmt.Sprintf("Fetch table content failed: %v", err))
-		return
-	}
-
-	for i := 0; i < len(getTimeseriesResp.GetRows()); i++ {
-		if getTimeseriesResp.GetRows()[i].GetTimeInus() == truncatedUs {
-			rows := getTimeseriesResp.GetRows()[i].GetFieldsMap()
-
-			timeseriesKey := tablestore.NewTimeseriesKey()
-			timeseriesKey.SetMeasurementName(measurement_name)
-			timeseriesKey.SetDataSource(uuid)
-			timeseriesKey.AddTag("plate_id", strconv.Itoa(plateid))
-
-			timeseriesRow := tablestore.NewTimeseriesRow(timeseriesKey)
-			timeseriesRow.SetTimeInus(truncatedUs)
-
-			for key, value := range rows {
-				timeseriesRow.AddField(key, value)
-			}
-			timeseriesRow.AddField("reply",
-				tablestore.NewColumnValue(tablestore.ColumnType_STRING, content))
-
-			putTimeseriesDataRequest := tablestore.NewPutTimeseriesDataRequest(table_name)
-			putTimeseriesDataRequest.AddTimeseriesRows(timeseriesRow)
-
-			_, err := client.PutTimeseriesData(putTimeseriesDataRequest)
-			if err != nil {
-				slog.Error(fmt.Sprintf("Fail to write into the table: %v", err))
-				return
-			}
-			slog.Info("Success to write into the table")
-		}
-	}
 }
