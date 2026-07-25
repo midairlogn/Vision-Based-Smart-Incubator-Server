@@ -294,3 +294,7 @@ GET /api/colony?uuid=<设备UUID>&plateid=<盘位号>&start=<起始微秒>&end=<
 - **预签名 URL 有效期**：均为 10 分钟
 - **OSS CORS**：`colony.html` 会在浏览器中 `fetch` 识别记录文本，OSS Bucket 需要允许 Web 页面来源的跨域 GET 请求
 - **MQTT Broker 地址**：通过 `PORT` 环境变量配置，如 `tcp://localhost:1883`
+
+## 许可证
+
+[GNU General Public License v3.0](LICENSE)
