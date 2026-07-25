@@ -1239,8 +1239,20 @@ select.form-input,
   color: var(--primary);
 }
 
-.ai-panel-header .btn-secondary {
+.ai-panel-actions {
   margin-left: auto;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ai-panel-actions .spinner {
+  width: 14px;
+  height: 14px;
+  border-width: 2px;
+  flex-shrink: 0;
 }
 
 .ai-panel-body {
@@ -1378,6 +1390,10 @@ select.form-input,
 .ai-error {
   color: var(--error);
   font-weight: 500;
+}
+
+.ai-error + .ai-reply {
+  margin-top: 12px;
 }
 
 .ai-loading {
