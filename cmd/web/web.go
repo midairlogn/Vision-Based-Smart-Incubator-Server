@@ -123,8 +123,8 @@ func handleEnvQuery(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if endMicro-startMicro > 7*24*3600*1000000 {
-		http.Error(w, `{"sucess":false,"message":"time range exceeds 7 days"}`, http.StatusBadRequest)
+	if endMicro-startMicro > 30*24*3600*1000000 {
+		http.Error(w, `{"sucess":false,"message":"time range exceeds 30 days"}`, http.StatusBadRequest)
 		return
 	}
 
@@ -181,8 +181,8 @@ func handleColonyQuery(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if endMicro-startMicro > 7*24*3600*1000000 {
-		http.Error(w, `{"success":false,"message":"time range exceeds 7 days"}`, http.StatusBadRequest)
+	if endMicro-startMicro > 30*24*3600*1000000 {
+		http.Error(w, `{"success":false,"message":"time range exceeds 30 days"}`, http.StatusBadRequest)
 		return
 	}
 
